@@ -1,0 +1,44 @@
+LAB1B
+
+Sarah Le Cam
+UCLA ID: 804-099-507
+
+Files:
+  - simpsh.c: Source Module
+  - Makefile:
+      - default: make executable simpsh from object file simpsh.o
+		created from C source module simpsh.c
+      - check: runs test file (test.sh)
+      - clean: delete executable, object files, testing directory and
+		distribution tarball
+      - dist: creates the distribution tarball containing simpsh.c,
+		Makefile, README and test.sh
+  - test.sh: testing script which tests option implementation
+
+Features:
+My simpsh works as directed in the Lab1 project description. In order to
+execute commands, run the program with ./simpsh and feed it options.
+Implemented options:
+  File flags
+    --append, --cloexec, --creat, --directory, --dsync, --excl, --nofollow,
+    --nonblock, --rsync, --sync, --trunc
+  File-opening options
+    --rdonly, --rdwr, --wronly, --pipe
+  Subcommand options
+    --command, --wait
+  Miscelaneous options
+    --close, --verbose, --abort, --catch, --ignore, --default, --pause
+
+Limitations:
+No known limitations
+
+Testing Methodology:
+I tested principally directly from the command line as I was working
+on the code to ensure that the program recognized arguments and errors
+correctly. I then ran the provided grading script to ensure that everything
+seemed correct. Finally I incorporated the provided tests with my own and
+tested possible edge cases and syntax errors.
+
+Sources:
+ - http://stackoverflow.com/questions/15466782/parsing-command-line-options-with-multiple-arguments-getopt
+ - http://stackoverflow.com/questions/5553352/how-do-i-check-if-file-exists-in-makefile
