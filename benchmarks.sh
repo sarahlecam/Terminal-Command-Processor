@@ -50,7 +50,7 @@ touch test25out.txt
 touch test25err.txt
 ./simpsh \
   --verbose \
-  --rdonly a \
+  --rdonly a0.txt \
   --pipe \
   --pipe \
   --creat --trunc --wronly c \
