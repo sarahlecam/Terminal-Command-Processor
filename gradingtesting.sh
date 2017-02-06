@@ -99,7 +99,7 @@ echo "here you may see multiple running time, but there should be one"
 echo "corresponding to the running time of uniq the a0.txt"
 touch test3out.txt
 touch test3err.txt
-./simpsh --rdonly a0.txt --wronly test3out.txt \
+./simpsh --verbose --rdonly a0.txt --wronly test3out.txt \
     --wronly test3err.txt --profile --command 0 1 2 uniq --wait
 
 echo ""
