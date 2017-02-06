@@ -9,6 +9,7 @@
 #include <string.h>
 #include <signal.h>
 #include <sys/wait.h>
+#include <sys/resource.h>
 
 // Flag set by "--verbose" argument
 static int verbose_flag;
@@ -44,6 +45,10 @@ static int *start_commands;
 static int *end_commands;
 static int w_index;
 static int WAIT_SIZE;
+
+
+// rusage variables
+struct rusage usage;
 
 
 /*
@@ -217,6 +222,20 @@ void wait_print(int start, int end, char **argv, int exit_stat) {
 		printf("%s ", argv[i]);
 	}
 	printf("\n");
+}
+
+
+/*
+print rusage information
+*/
+void option_profile(int who) {
+	if (getrusage(who, &usage)== 0) {
+		// success
+
+	} else {
+		fprintf(stderr, "Error: Could not retrieve usage data.\n");
+		return_val(1);
+	}
 }
 
 
