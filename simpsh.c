@@ -1186,7 +1186,24 @@ invalid. These files could not be opened or have been closed.\n");
 		struct timeval final_user_time = usage.ru_utime;
 		struct timeval final_system_time = usage.ru_stime;
 
-		printf("\nTotal Ressources used: \n");
+		printf("\nTotal Ressources used by Parent Processes: \n");
+		printf("Time spent executing user instructions: %u seconds, %u microseconds; \n",
+			(int)final_user_time.tv_sec, (int)final_user_time.tv_usec);
+		printf("Time spent on operating system code on behalf of process: %u seconds, %u microseconds; \n",
+			(int)final_system_time.tv_sec, (int)final_system_time.tv_usec);
+		printf("\n");
+
+	} else {
+		fprintf(stderr, "Error: Could not retrieve usage data.\n");
+		return_val(1);
+	}
+
+	if (getrusage(RUSAGE_CHILDREN, &usage)== 0) {
+		// success
+		struct timeval final_user_time = usage.ru_utime;
+		struct timeval final_system_time = usage.ru_stime;
+
+		printf("\nTotal Ressources used by Parent Processes: \n");
 		printf("Time spent executing user instructions: %u seconds, %u microseconds; \n",
 			(int)final_user_time.tv_sec, (int)final_user_time.tv_usec);
 		printf("Time spent on operating system code on behalf of process: %u seconds, %u microseconds; \n",
