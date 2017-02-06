@@ -62,7 +62,7 @@ touch test25err.txt
   --wait > test25out.txt
 echo "./simpsh times"
 echo "===="
-echo test25out.txt
+cat test25out.txt
 echo "===="
 
 
