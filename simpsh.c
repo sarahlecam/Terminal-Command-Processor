@@ -383,9 +383,6 @@ ignored.\n", argv[optind]);
 
 			// flag set
 			case 0:
-			if (profile_flag) {
-				option_profile(RUSAGE_SELF);
-			}
 			break;
 
 
