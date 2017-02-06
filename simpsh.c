@@ -237,8 +237,8 @@ void option_profile(int who) {
 		double user_time = (double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec/1000000;
 		double os_time = (double)usage.ru_stime.tv_sec + (double)usage.ru_stime.tv_usec/1000000;
 		printf("\nRessources used by option: \n");
-		printf("Time spent executing user instructions: %d seconds; \n", (user_time - old_user_time));
-		printf("Time spent on operating system code on behalf of process: %d seconds; \n", (os_time - old_system_time));
+		printf("Time spent executing user instructions: %d seconds; \n", (double)(user_time - old_user_time));
+		printf("Time spent on operating system code on behalf of process: %d seconds; \n", (double)(os_time - old_system_time));
 		printf("\n");
 
 	} else {
@@ -296,8 +296,8 @@ ignored.\n", argv[optind]);
 	while (1) {
 		if (profile_flag) {
 			if (getrusage(RUSAGE_SELF, &usage)== 0) {
-				old_user_time = (double)usage.ru_utime.tv_sec + (double)(usage.ru_utime.tv_usec/1000000);
-				old_system_time = (double)usage.ru_stime.tv_sec + (double)(usage.ru_stime.tv_usec/1000000);
+				old_user_time = (double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec/1000000;
+				old_system_time = (double)usage.ru_stime.tv_sec + (double)usage.ru_stime.tv_usec/1000000;
 			} else {
 				fprintf(stderr, "Error: Could not retrieve usage data.\n");
 				return_val(1);
