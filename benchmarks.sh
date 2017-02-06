@@ -39,19 +39,9 @@ cp a0.txt ./$TEMPDIR/
 
 cd $TEMPDIR
 
-
-# use the provided lab1c_generate_a0.sh and pg98.txt to generate a0.txt
-# please use the provided a0.txt and make sure it is not modified by any code
-
 echo "==="
 
-echo "please DO NOT run multiple testing scripts at the same time"
-echo "starting grading"
-
-NUM_PASSED=0
-NUM_FAILED=0
-
-# test case 1 --profile almost no time
+# benchmark 1 prompt command
 echo ""
 echo "--->test case 1:"
 echo "check if there is time info for --rdonly command"
