@@ -46,6 +46,8 @@ static int *end_commands;
 static int w_index;
 static int WAIT_SIZE;
 
+//// Flag set by "--profile" argument
+static int profile_flag;
 
 // rusage variables
 struct rusage usage;
@@ -245,6 +247,7 @@ main (int argc, char **argv) {
 	int c;
 
 	verbose_flag = 0;
+	profile_flag = 0;
 	return_value = 0;
 
 	// open file flags
@@ -277,7 +280,7 @@ main (int argc, char **argv) {
 
 	if (!isOption(argv[optind])){
 		// first argument is not an option
-		fprintf(stderr, "Error: The argument %s is not an option and will be \
+		fprintf(stderr, "Warning: The argument %s is not an option and will be \
 ignored.\n", argv[optind]);
 	}
 
@@ -311,7 +314,7 @@ ignored.\n", argv[optind]);
 			// miscellaneous options
 			{"close",			required_argument,	0,							'o'},
 			{"verbose",		no_argument,				&verbose_flag,		1},
-			{"profile",		no_argument,				0,							'B'},
+			{"profile",		no_argument,				&profile_flag,		1},
 			{"abort",			no_argument,				0,							'A'},
 			{"catch",			required_argument,	0,							'h'},
 			{"ignore",		required_argument,	0,							'i'},
@@ -342,7 +345,7 @@ ignored.\n", argv[optind]);
 			case 'a':
 			if (optind != argc && !isOption(argv[optind])){
 				// more than one argument is provided
-				fprintf(stderr, "Error: [--append] does not accept any arguments. \
+				fprintf(stderr, "Warning: [--append] does not accept any arguments. \
 %s is not an option and will be ignored.\n", argv[optind]);
 			}
 
@@ -358,7 +361,7 @@ ignored.\n", argv[optind]);
 			case 'e':
 			if (optind != argc && !isOption(argv[optind])){
 				// more than one argument is provided
-				fprintf(stderr, "Error: [--cloexec] does not accept any arguments. \
+				fprintf(stderr, "Warning: [--cloexec] does not accept any arguments. \
 %s is not an option and will be ignored.\n", argv[optind]);
 			}
 
@@ -374,7 +377,7 @@ ignored.\n", argv[optind]);
 			case 'c':
 			if (optind != argc && !isOption(argv[optind])){
 				// more than one argument is provided
-				fprintf(stderr, "Error: [--creat] does not accept any arguments. \
+				fprintf(stderr, "Warning: [--creat] does not accept any arguments. \
 %s is not an option and will be ignored.\n", argv[optind]);
 			}
 
@@ -390,7 +393,7 @@ ignored.\n", argv[optind]);
 			case 'd':
 			if (optind != argc && !isOption(argv[optind])){
 				// more than one argument is provided
-				fprintf(stderr, "Error: [--directory] does not accept any arguments. \
+				fprintf(stderr, "Warning: [--directory] does not accept any arguments. \
 %s is not an option and will be ignored.\n", argv[optind]);
 			}
 
@@ -406,7 +409,7 @@ ignored.\n", argv[optind]);
 			case 'D':
 			if (optind != argc && !isOption(argv[optind])){
 				// more than one argument is provided
-				fprintf(stderr, "Error: [--dsync] does not accept any arguments. \
+				fprintf(stderr, "Warning: [--dsync] does not accept any arguments. \
 %s is not an option and will be ignored.\n", argv[optind]);
 			}
 
@@ -422,7 +425,7 @@ ignored.\n", argv[optind]);
 			case 'E':
 			if (optind != argc && !isOption(argv[optind])){
 				// more than one argument is provided
-				fprintf(stderr, "Error: [--excl] does not accept any arguments. \
+				fprintf(stderr, "Warning: [--excl] does not accept any arguments. \
 %s is not an option and will be ignored.\n", argv[optind]);
 			}
 
@@ -438,7 +441,7 @@ ignored.\n", argv[optind]);
 			case 'n':
 			if (optind != argc && !isOption(argv[optind])){
 				// more than one argument is provided
-				fprintf(stderr, "Error: [--nofollow] does not accept any arguments. \
+				fprintf(stderr, "Warning: [--nofollow] does not accept any arguments. \
 %s is not an option and will be ignored.\n", argv[optind]);
 			}
 
@@ -454,7 +457,7 @@ ignored.\n", argv[optind]);
 			case 'N':
 			if (optind != argc && !isOption(argv[optind])){
 				// more than one argument is provided
-				fprintf(stderr, "Error: [--nonblock] does not accept any arguments. \
+				fprintf(stderr, "Warning: [--nonblock] does not accept any arguments. \
 %s is not an option and will be ignored.\n", argv[optind]);
 			}
 
@@ -470,7 +473,7 @@ ignored.\n", argv[optind]);
 			case 'r':
 			if (optind != argc && !isOption(argv[optind])){
 				// more than one argument is provided
-				fprintf(stderr, "Error: [--rsync] does not accept any arguments. \
+				fprintf(stderr, "Warning: [--rsync] does not accept any arguments. \
 %s is not an option and will be ignored.\n", argv[optind]);
 			}
 
@@ -486,7 +489,7 @@ ignored.\n", argv[optind]);
 			case 's':
 			if (optind != argc && !isOption(argv[optind])){
 				// more than one argument is provided
-				fprintf(stderr, "Error: [--sync] does not accept any arguments. \
+				fprintf(stderr, "Warning: [--sync] does not accept any arguments. \
 %s is not an option and will be ignored.\n", argv[optind]);
 			}
 
@@ -502,7 +505,7 @@ ignored.\n", argv[optind]);
 			case 't':
 			if (optind != argc && !isOption(argv[optind])){
 				// more than one argument is provided
-				fprintf(stderr, "Error: [--trunc] does not accept any arguments. \
+				fprintf(stderr, "Warning: [--trunc] does not accept any arguments. \
 %s is not an option and will be ignored.\n", argv[optind]);
 			}
 
@@ -531,7 +534,7 @@ provided.\n");
 
 			if (optind != argc && !isOption(argv[optind])){
 				// more than one argument is provided
-				fprintf(stderr, "Error: [--rdonly f] only accepts a single argument. \
+				fprintf(stderr, "Warning: [--rdonly f] only accepts a single argument. \
 %s is not an option and will be ignored.\n", argv[optind]);
 			}
 
@@ -567,7 +570,7 @@ provided.\n");
 
 			if (optind != argc && !isOption(argv[optind])){
 				// more than one argument is provided
-				fprintf(stderr, "Error: [--rdwr f] only accepts a single argument. \
+				fprintf(stderr, "Warning: [--rdwr f] only accepts a single argument. \
 %s is not an option and will be ignored.\n", argv[optind]);
 			}
 
@@ -603,7 +606,7 @@ provided.\n");
 
 			if (optind != argc && !isOption(argv[optind])){
 				// more than one argument is provided
-				fprintf(stderr, "Error: [--wronly f] only accepts a single argument. \
+				fprintf(stderr, "Warning: [--wronly f] only accepts a single argument. \
 %s is not an option and will be ignored.\n", argv[optind]);
 			}
 
@@ -635,7 +638,7 @@ provided.\n");
 			}
 			if (optind != argc && !isOption(argv[optind])){
 				// more than one argument is provided
-				fprintf(stderr, "Error: [--pipe] does not accept any arguments. \
+				fprintf(stderr, "Warning: [--pipe] does not accept any arguments. \
 %s is not an option and will be ignored.\n", argv[optind]);
 			}
 
@@ -763,7 +766,7 @@ invalid. These files could not be opened or have been closed.\n");
 			case 'W':
 			if (optind != argc && !isOption(argv[optind])){
 					// more than one argument is provided
-				fprintf(stderr, "Error: [--wait] does not accept any arguments. \
+				fprintf(stderr, "Warning: [--wait] does not accept any arguments. \
 	%s is not an option and will be ignored.\n", argv[optind]);
 			}
 			if (verbose_flag) {
@@ -819,6 +822,12 @@ invalid. These files could not be opened or have been closed.\n");
 				break;
 			}
 
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--close N] only accepts a single argument. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
 			if (verbose_flag) {
 				if (oflags != 0) {
 					printf("\n");
@@ -857,7 +866,7 @@ invalid. These files could not be opened or have been closed.\n");
 			case 'A':
 			if (optind != argc && !isOption(argv[optind])){
 					// more than one argument is provided
-				fprintf(stderr, "Error: [--nofollow] does not accept any arguments. \
+				fprintf(stderr, "Warning: [--nofollow] does not accept any arguments. \
 	%s is not an option and will be ignored.\n", argv[optind]);
 			}
 			if (verbose_flag) {
@@ -886,6 +895,12 @@ invalid. These files could not be opened or have been closed.\n");
 				optind--;
 				return_val(1);
 				break;
+			}
+
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--catch N] only accepts a single argument. \
+%s is not an option and will be ignored.\n", argv[optind]);
 			}
 
 			if (verbose_flag) {
@@ -939,6 +954,12 @@ invalid. These files could not be opened or have been closed.\n");
 				break;
 			}
 
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--ignore N] only accepts a single argument. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
 			if (verbose_flag) {
 				if (oflags != 0) {
 					printf("\n");
@@ -990,6 +1011,12 @@ invalid. These files could not be opened or have been closed.\n");
 				break;
 			}
 
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--default N] only accepts a single argument. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
 			if (verbose_flag) {
 				if (oflags != 0) {
 					printf("\n");
@@ -1033,7 +1060,7 @@ invalid. These files could not be opened or have been closed.\n");
 			}
 			if (optind != argc && !isOption(argv[optind])){
 				// more than one argument is provided
-				fprintf(stderr, "Error: [--pause] does not accept any arguments. \
+				fprintf(stderr, "Warning: [--pause] does not accept any arguments. \
 	%s is not an option and will be ignored.\n", argv[optind]);
 			}
 
