@@ -251,6 +251,8 @@ void option_profile(int who) {
 				(int)((double)os_time.tv_sec - (double)old_system_time.tv_sec),
 				(int)((double)os_time.tv_usec - (double)old_system_time.tv_usec));
 			printf("\n");
+			old_user_time = user_time;
+			old_system_time = os_time;
 		} else {
 			printf("\nRessources used by children processes: \n");
 			printf("Time spent executing user instructions: %u seconds, %u microseconds; \n",
@@ -366,15 +368,6 @@ ignored.\n", argv[optind]);
 
 
 		switch (c) {
-			if (profile_flag) {
-				if (getrusage(RUSAGE_SELF, &usage)== 0) {
-					old_user_time = usage.ru_utime;
-					old_system_time = usage.ru_stime;
-				} else {
-					fprintf(stderr, "Error: Could not retrieve usage data.\n");
-					return_val(1);
-				}
-			}
 
 			// flag set
 			case 0:
@@ -1203,7 +1196,7 @@ invalid. These files could not be opened or have been closed.\n");
 		struct timeval final_user_time = usage.ru_utime;
 		struct timeval final_system_time = usage.ru_stime;
 
-		printf("\nTotal Ressources used by Parent Processes: \n");
+		printf("\nTotal Ressources used by Child Processes: \n");
 		printf("Time spent executing user instructions: %u seconds, %u microseconds; \n",
 			(int)final_user_time.tv_sec, (int)final_user_time.tv_usec);
 		printf("Time spent on operating system code on behalf of process: %u seconds, %u microseconds; \n",
