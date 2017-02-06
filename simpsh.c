@@ -2,704 +2,1207 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <getopt.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
 #include <fcntl.h>
-#include <errno.h>
 #include <unistd.h>
-#include <signal.h>
+#include <errno.h>
 #include <ctype.h>
+#include <string.h>
+#include <signal.h>
+#include <sys/wait.h>
 #include <sys/resource.h>
+#include <sys/time.h>
 
-int cmpstr(char *a, char* b)
-{
-  int i = 0;
-  while (a[i] != '\0')
-    {
-      if (b[i] == '\0')
+// Flag set by "--verbose" argument
+static int verbose_flag;
+
+// File descriptors/pipes data arrays
+static int d_index;
+static int *file_pointers;
+static int POINTERS_SIZE;
+static int *pipe_or_no;
+
+// pipe descriptors
+static int pipe_fd[2];
+
+// file descriptor
+static int fd;
+
+// Exit return value
+static int return_value;
+
+// in/out/err
+static int cmd_fd[3];
+
+// number of arguments fed into command
+static int com_args;
+static int c_index;
+
+// to parse commands
+static int ind;
+
+// for --wait option
+static int *wait_pids;
+static int *start_commands;
+static int *end_commands;
+static int w_index;
+static int WAIT_SIZE;
+
+//// Flag set by "--profile" argument
+static int profile_flag;
+
+// rusage variables
+struct rusage usage;
+struct timeval old_user_time;
+struct timeval old_system_time;
+struct timeval old_child_user_time;
+struct timeval old_child_system_time;
+
+
+
+/*
+signal handler
+*/
+void sighandler (int sign){
+	// error message upon catching message
+	fprintf(stderr, "Signal %u caught \n", sign);
+	perror("");
+	exit(sign);
+}
+
+
+/*
+set return value
+*/
+void return_val(int value) {
+	if (return_value < value) {
+		// update if value is larger than previous return value
+		return_value = value;
+	}
+}
+
+
+/*
+Checks if argument is an option
+*/
+int isOption(char *arg) {
+	if (arg[0] == '-' && arg[1] == '-') {
+		return 1;
+	} else {
+		return 0;
+	}
+}
+
+
+/*
+Checks if string is numeric
+*/
+int isNumeric(char *st) {
+	for (int i = 0; i < strlen(st) ; i++) {
+		if (!isdigit(st[i])) {
+			// character in string is not a digit
+			return 0;
+		}
+	}
 	return 1;
-      if (a[i] != b[i])
-	return 1;
-      i++;
-    }
-  return b[i] != '\0';
 }
 
-int validfd (char *endptr, long fd, int fn)
-{
-  if (*endptr == NULL)
-    {
-      if (fd < 0 || (fd >= fn))
-	{
-	  return 0; /* false */
+
+/*
+Checks if there is enough space allocated in the file_pointer array
+to add another file. If not, double size of file array.
+*/
+void addToFileArray() {
+
+	if (d_index == POINTERS_SIZE) {
+		// not enough space allocated; double size of array
+		POINTERS_SIZE = POINTERS_SIZE * 2;
+		file_pointers = realloc(file_pointers, POINTERS_SIZE * sizeof(int));
+		pipe_or_no = realloc(pipe_or_no, POINTERS_SIZE * sizeof(int));
 	}
-      return 1;
-    }
-  return 0; /* false */
+
+	if (w_index == WAIT_SIZE) {
+		// not enough space allocated; double size of array
+		WAIT_SIZE = WAIT_SIZE * 2;
+		wait_pids = realloc(wait_pids, 	WAIT_SIZE * sizeof(int));
+		start_commands = realloc(start_commands, WAIT_SIZE * sizeof(int));
+		end_commands = realloc(end_commands, 	WAIT_SIZE * sizeof(int));
+	}
+
+	if (errno == ENOMEM) {
+		// 	could not open file
+		fprintf(stderr, "Error: Not enough space in memory to increase array \
+size\n.");
+		perror("");
+
+		// update return value
+		return_val(1);
+	}
+
 }
 
-/* check syntax */
-int flag_syntax (int optind, int argc, char**argv) {
-  char *ptr = NULL;
-  if (optind < argc)
-    {
-      ptr = argv[optind];
-    }
-  /* either at the end or --option is followed by another --option */
-  if (optind == argc || (ptr != NULL && *(ptr) == '-'))
-    {
-      /* true */
-      return 1;
-    }
-  else
-    {
-      return 0;
-    }
+
+/*
+input: file path & opening flag
+Attempts to open file and returns error if cannot do so
+*/
+void open_file(const char *file, int open_flags) {
+	// get file descriptor
+	fd = open(file, open_flags, 0644);
+
+	if (fd == -1) {
+		// 	could not open file
+		fprintf(stderr, "Error: Could not open files %s.\n", optarg);
+		perror("");
+		// update return value if higher than previous value
+		return_val(1);
+	}
+
+	// add file to file descriptor array
+	addToFileArray();
+	file_pointers[d_index] = fd;
+	pipe_or_no[d_index] = 0;
+
+	// increase d_index
+	d_index++;
 }
 
-/* signal handler */
-void catch_handler(int sig) {
-  /* exit shell with status sig */
-  fprintf(stderr, "%d caught\n", sig);
-  exit(sig);
-}
 
-int opt_syntax (int optind, int argc, char**argv) {
-  char* fileptr = NULL;
-  if (optind < argc)
-    {
-      fileptr = argv[optind];
-    }
-  //  fprintf(stderr, "Test:\noptind: %d, argv[optind]: %s, argv[optind-1]: %s\n", optind, argv[optind], argv[optind-1]);
+/*
+Executes command
+*/
+void exec_cmd(char *const args[]) {
+	// attempt to fork
+	pid_t c_pid = fork();
 
-  /* convert to long */
-  long num = 0;
-  char* endp = NULL;
-  num = strtol(argv[optind-1], &endp, 10);
-  if(*endp) {
-    fprintf(stderr, "Invalid number\n");
-    return 0;
-  }
+	if (c_pid < 0) {
+		// 	could not create subprocess
+		fprintf(stderr, "Error: Could not create child process.\n");
 
-  if (optind == argc || (fileptr != NULL && *(fileptr) == '-'))
-    return 1;
-  return 0;
-}
+		// update return value if higher than previous value
+		return_val(1);
+	} else if (c_pid == 0) {
+		// change standard input, output and error
+		dup2(file_pointers[cmd_fd[0]], 0);
+		dup2(file_pointers[cmd_fd[1]], 1);
+		dup2(file_pointers[cmd_fd[2]], 2);
 
-void print_waitStatus(int first_index, int second_index, char**argv, int exit_status) {
-  int i = first_index;
-  /* print exit status */
-  fprintf(stdout, "%d ", exit_status);
-  while(i <= second_index) {
-    fprintf(stdout, "%s ", argv[i]);
-    i++;
-    }
-  fprintf(stdout, "\n");
-}
-
-int main(int argc, char **argv) {
-  int c;
-  int fn = 0;
-  int verbose_flag = 0;
-  int exit_status = 0; /* exit status 0 if all successful */
-  int max_extstat = 0;
-  int prof_flag = 0;
-  int random;
-
-  struct timeval oldutime;
-  struct timeval oldstime;
-
-  struct timeval newutime;
-  struct timeval newstime;
-  oldutime.tv_sec = 0;
-  oldutime.tv_usec = 0;
-  oldstime.tv_sec = 0;
-  oldstime.tv_usec = 0;
-
-
-  /* lookahead to get size and allocate fd array */
-  int fd_size = 0;
-  int i;
-  for (i = 0; i < argc; i++)
-  {
-    if (cmpstr(argv[i],"--rdonly\0")==0 || cmpstr(argv[i],"--wronly\0")==0 || cmpstr(argv[i],"--rdwr\0")==0)
-      {
-        fd_size++; /* each file has 1 fd */
-      }
-    else if (cmpstr(argv[i],"--pipe")==0)
-      {
-	fd_size += 2; /* each pipe has 2 fd */
-      }
-  }
-
-  int j = 0;
-
-
-  /* dynamically allocate size for fd */
-  int *fd = (int*) malloc(sizeof(int)*fd_size);
-  int *pipe_array = (int*) malloc(sizeof(int)*fd_size);
-  int *proc_array = (int*) malloc(sizeof(int)*16); //max at 16 processes
-  int proc_index = 0;
-  /* used to track the first and last index of command for printing */
-  int *first_index = (int*) malloc(sizeof(int)* argc);
-  int *last_index = (int*) malloc(sizeof(int)* argc);
-  int command_num = 0;
-  /* initialize to -2 just for own personal error checking methods */
-  while(j < argc) {
-    first_index[j] = -2;
-    last_index[j] = -2;
-    j++;
-  }
-
-  char **arguments = (char**) malloc(sizeof(char*) * argc);
-  for(j = 0; j < argc; j++) {
-    arguments[j] = argv[j];
-  }
-  j = 0;
-
-
-
-  int flag = 0;
-
-  while (1) {
-    static struct option long_options[] =
-      {
-	/* File flag */
-     	{ "append", no_argument, 0, 'a' },
-	{ "cloexec", no_argument, 0, 'b' },
-	{ "creat", no_argument, 0, 'd' },
-	{ "directory", no_argument, 0, 'e' },
-     	{ "dsync", no_argument, 0, 'f' },
-	{ "excl", no_argument, 0, 'g' },
-	{ "nofollow", no_argument, 0, 'h' },
-	{ "nonblock", no_argument, 0, 'i' },
-	{ "rsync", no_argument, 0, 'j' },
-	{ "sync", no_argument, 0, 'k' },
-	{ "trunc", no_argument, 0, 'l' },
-
-	/* File-opening options */
-	{ "rdonly", required_argument, 0, 'r' },
-	{ "wronly", required_argument, 0, 'w' },
-	{ "rdwr", required_argument, 0, 'x' },
-	{ "pipe", no_argument, 0, 'y' },
-
-	/* Miscellaneous options */
-        { "verbose", no_argument, 0, 'v' },
-	{ "profile", no_argument, 0, 'm'},
-	{ "abort", no_argument, 0, 'n' },
-	{ "catch", required_argument, 0, 'o' },
-	{ "ignore", required_argument, 0, 'p' },
-	{ "default", required_argument, 0, 'q' },
-	{ "pause", no_argument, 0, 's' },
-	{ "close", required_argument, 0, 't'},
-
-	/* Subcommand options */
-	{ "command", required_argument, 0, 'c' },
-	{ "wait", no_argument, 0, 'z' },
-	{ 0, 0, 0, 0 }
-      };
-    int option_index = 0;
-    c = getopt_long(argc, argv, "", long_options, &option_index);
-
-    /* Detect the end of options */
-    if (c == -1) {
-      break;
-    }
-
-    switch (c)
-      {
-      /* File flag cases */
-      case 'a':
-      case 'b':
-      case 'd':
-      case 'e':
-      case 'f':
-      case 'g':
-      case 'h':
-      case 'i':
-      case 'j':
-      case 'k':
-      case 'l':
-	if(flag_syntax (optind, argc, argv)) {
-	  /* set flags since valid syntax */
-	  if(c == 'a')
-	    flag |= O_APPEND;
-	  else if (c == 'b')
-	    flag |= O_CLOEXEC;
-	  else if (c == 'd')
-	    flag |= O_CREAT;
-	  else if (c == 'e')
-	    flag |= O_DIRECTORY;
-	  else if (c == 'f')
-	    flag |= O_DSYNC;
-	  else if (c == 'g')
-	    flag |= O_EXCL;
-	  else if (c == 'h')
-	    flag |= O_NOFOLLOW;
-	  else if (c == 'i')
-	    flag |= O_NONBLOCK;
-	  else if (c == 'j')
-	    flag |= O_RSYNC;
-	  else if (c == 'k')
-	    flag |= O_SYNC;
-	  else if (c == 'l')
-	    flag |= O_TRUNC;
-	}
-	/* Invalid syntax, print error and don't set flag. */
-	else {
-	  fprintf(stderr, "Syntax error: %s has no arguments.\n", argv[optind-1]);
-	  exit_status = 1;
-	}
-	/* valid syntax, check for verbose flag */
-	if(verbose_flag == 1) {
-	  fprintf(stdout, "%s\n", argv[optind-1]);
-	}
-	break;
-
-	/* file-opening options */
-      case 'r':
-      case 'w':
-      case 'x':
-	/* check for flags */
-	if(c == 'r') {
-	  flag = (O_RDONLY | flag);
-	}
-	else if (c == 'w') {
-	  flag = (O_WRONLY | flag);
-	}
-	else {
-	  flag = (O_RDWR | flag);
-	}
-
-	/* check syntax */
-	char* fileptr = NULL;
-	if (optind < argc)
-	  {
-	    fileptr = argv[optind];
-	  }
-
-	/* last option or next next arg is an option */
-	if (optind == argc || (fileptr != NULL && *(fileptr) == '-'))
-	  {
-	    /* open file */
-	    fd[fn] = open(optarg, flag, 0755);
-	    pipe_array[fn] = 0;
-	    if (fd[fn] == -1)
-	      {
-		fprintf(stderr, "Error opening file: %s\n", optarg);
-		fd[fn] = -1; /* map to a dummy fd */
-		fn++;
-		exit_status = 1;
-		flag = 0; /* reset flags after opening file */
-		break;
-	      }
-	    fn++;
-	  }
-	else /* print syntax error message */
-	  {
-	    fprintf(stderr, "Syntax error: %s has one argument only.\n", argv[optind-2]);
-	    exit_status = 1;
-	  }
-	flag = 0;
-	 /* check verbose flag */
-	 if (verbose_flag)
-	   {
-	     if(c == 'r')
-	       fprintf(stdout, "--rdonly %s\n", optarg);
-	     else if(c == 'x')
-               fprintf(stdout, "--rdwr %s\n", optarg);
-	     else
-               fprintf(stdout, "--wronly %s\n", optarg);
-	   }
-	 break;
-
-	 /* pipe */
-      case 'y':
-	if(flag_syntax (optind, argc, argv)) {
-	  int pipefd[2];
-	  int errval; /* check for valid flags */
-	  if(pipe2(pipefd, flag) == -1) { /* fail */
-	    errval = errno;
-	    fprintf(stderr, "Pipe failed.\n");
-	    /* failed because invalid flags */
-	    if (errno == EINVAL) {
-	      fprintf(stderr, "Invalid pipe flag.\n");
-	    }
-	    exit_status = 1;
-	    flag = 0;
-	  }
-
-
-	  else { /* pipe successful, read index 0, write index 1 */
-	    fd[fn] = pipefd[0];
-	    pipe_array[fn] = 1;
-	    fn++;
-	    fd[fn] = pipefd[1];
-	    pipe_array[fn] = 1;
-	    fn++;
-	    flag = 0;
-	  }
-	  /* consumes two file numbers */
-	  /* executes commands and places into logical file #'s output..? */
-	}
-	else {
-          fprintf(stderr, "Syntax error: %s has no arguments.\n", argv[optind-1]);
-	  exit_status = 1;
-        }
-	/* valid syntax, check for verbose flag */
-	if(verbose_flag == 1) {
-	  fprintf(stdout, "%s\n", argv[optind-1]);
-	}
-        break;
-
-
-	/* subcommand options, command and wait */
-      case 'c':
-	/* cannot start block with declaration */
-	random = 0;
-	/* char array for args of cmd */
-	char **c_args = malloc(sizeof(char*) * argc);
-	char **tmp = c_args; /* keep track of beginning of c_args */
-	int index = optind + 2;
-
-	/* syntax check: must have at least 4 args */
-	if (index >= argc)
-	  {
-	    fprintf(stderr, "Syntax error: invalid arguments for --command.\n");
-	    exit_status = 1;
-	    break;
-	  }
-
-	/* check that 4th arg must be an arg, not an option */
-	char* cptr = argv[index];
-	if (*(cptr) == '-' || *(cptr+1) == '-')
-	  {
-	    fprintf(stderr, "Syntax error: invalid arguments for --command.\n");
-	    exit_status = 1;
-	    break;
-	  }
-
-	/* store input/output/error values */
-	char* iendptr = NULL;
-	char* oendptr = NULL;
-	char* eendptr = NULL;
-	long in = strtol(argv[index-3], &iendptr, 10);
-	long out = strtol(argv[index-2], &oendptr, 10);
-	long err = strtol(argv[index-1], &eendptr, 10);
-
-	/* check for valid fd */
-	if (!validfd(iendptr,in,fn) || !validfd(oendptr,out,fn) || !validfd(eendptr,err,fn))
-	  {
-	    fprintf(stderr, "Invalid file descriptor.\n");
-	    exit_status = 1;
-	    break;
-	  }
-
-	/* if file is closed it's an error to access it */
-	if((fd[in] == -1) || (fd[out] == -1) || (fd[err] == -1)) {
-	  fprintf(stderr, "Error: Accessing invalid file\n");
-	  exit_status = 1;
-	  break;
-	}
-
-	/* check verbose flag */
-	if (verbose_flag)
-	  {
-	    fprintf(stdout, "--command %ld %ld %ld ", in, out, err);
-	  }
-
-	first_index[command_num] = index;
-
-	char *ptr = argv[index];
-	/* if arg is not an option, store into array */
-	while ((index < argc) && (*(ptr) != '-' || *(ptr+1) != '-'))
-	  {
-	    if (verbose_flag) /* verbose flag */
-	      fprintf(stdout, "%s ", argv[index]);
-
-	    *c_args = argv[index];
-	    c_args++;
-	    index++;
-	    ptr = argv[index];
-	  }
-	if(verbose_flag)
-	  fprintf(stdout, "\n");
-	*c_args = NULL; /* null terminate the args */
-
-	last_index[command_num] = index-1;
-
-	//       	fprintf(stderr, "First Index: %s, Last Index: %s\n",argv[first_index[command_num]], argv[last_index[command_num]]);
-
-	//	print_waitStatus(first_index[command_num], last_index[command_num], argv, 10);
-	command_num++;
-
-	int pid = fork();
-	int status;
-	if (pid >= 0) /* fork successful */
-	  {
-	    if (pid == 0) /* child process */
-	      {
-		/* use dup2 to specify i o e */
-		if (dup2(fd[in], 0) < 0)
-		  { /* error handling */
-		    fprintf(stderr, "Error redirecting input.\n");
-		    exit_status = 1;
-		  }
-		if (dup2(fd[out], 1) < 0)
-		  {
-		    fprintf(stderr, "Error redirecting output.\n");
-		    exit_status = 1;
-		  }
-		if (dup2(fd[err], 2) < 0)
-		  {
-		    fprintf(stderr, "Error redirecting stderr.\n");
-		    exit_status = 1;
-		  }
-		/* close child fds */
-		int i;
-		for(i = 0; i < fn; i++) {
-		  close(fd[i]);
+		for (int i = 0; i < d_index; i++) {
+			close(file_pointers[i]);
 		}
 
-		/* execvp returns -1 if error */
-		if (execvp(*tmp, tmp) < 0)
-		  {
-		    fprintf(stderr, "Error executing command: %s\n", *tmp);
-		    exit(1); /* exit child process */
-		  }
-	      }
-	    /* parent process */
-	    else
-	      {
-		proc_array[proc_index] = pid;
-		proc_index++;
+		if (execvp(args[0], args) == -1) {
+			// 	could not execute command
+			fprintf(stderr, "Error: Could not execute command %s.\n", args[0]);
+			perror("");
+			// update return value if higher than previous value
+			return_val(1);
+		}
+	} else {
+		// add child process to array
+		wait_pids[w_index] = c_pid;
+		w_index++;
 
-		/* close the end of the pipe that is being used, use fd[in,out,err] to check */
-		/* this doesn't close only the end that's being used so TODO this */
-		if(pipe_array[in] == 1) {
-		  close(fd[in]);
-		}
-		if(pipe_array[out] == 1) {
-		  close(fd[out]);
-		}
-		if(pipe_array[err] == 1) {
-		  close(fd[err]);
+		// close parent fds
+		if (pipe_or_no[cmd_fd[0]]) {
+			close(file_pointers[cmd_fd[0]]);
+			file_pointers[cmd_fd[0]] = -1;
 		}
 
-		//waitpid(pid, &status, 0);
-	      }
-	  }
-	else
-	  {
-	    fprintf(stderr, "Fork failed.");
-	    exit_status = 1;
-	  }
-	break;
+		if (pipe_or_no[cmd_fd[1]]) {
+			close(file_pointers[cmd_fd[1]]);
+			file_pointers[cmd_fd[1]] = -1;
+		}
 
-	/* wait */
-      case 'z':
-	if(flag_syntax(optind, argc, argv)) {
-	  if(verbose_flag == 1)
-	    fprintf(stdout, "--wait\n");
-
-	  /* TODO: 16 vs total number of processes */
-	  int i;
-	  for(i = 0; i < fn; i++) {
-	    close(fd[i]);
-	  }
-	  int status;
-	  int extstat; /* child's exit status */
-
-	  /* getrusage on child processes */
-	  struct rusage start_ru;
-	  struct rusage end_ru;
-	  getrusage(RUSAGE_CHILDREN, &start_ru);
-
-	  /* call wait on all child processes */
-	  for(i = 0; i < proc_index; i++) {
-	    /* getrusage for children */
-
-
-	    waitpid(proc_array[i], &status, 0);
-	    if (WIFSIGNALED(status)) {
-	      raise(WTERMSIG(status));
-	    }
-	    /* output exit status, copy of command + args */
-	    if (WIFEXITED(status)) {
-	      extstat = WEXITSTATUS(status);
-	      print_waitStatus(first_index[i], last_index[i], arguments, extstat);
-	      if (extstat > max_extstat)
-		max_extstat = extstat;
-	    }
-	    else {
-	      fprintf(stderr, "Child process not terminated normally.\n");
-	      exit_status = 1;
-	    }
-	  }/* end for */
-	  getrusage(RUSAGE_CHILDREN, &end_ru);
-	  fprintf(stdout, "Child Processes: User CPU Time Used: %lld seconds, %lld microseconds. System CPU Time Used: %lld seconds, %lld microseconds.\n", \
-	      (long long)(end_ru.ru_utime.tv_sec - start_ru.ru_utime.tv_sec), (long long)(end_ru.ru_utime.tv_usec - start_ru.ru_utime.tv_usec), \
-	      (long long)(end_ru.ru_stime.tv_sec - start_ru.ru_stime.tv_sec), (long long)(end_ru.ru_stime.tv_usec - start_ru.ru_stime.tv_usec));
+		if (pipe_or_no[cmd_fd[2]]) {
+				close(file_pointers[cmd_fd[2]]);
+				file_pointers[cmd_fd[2]] = -1;
+		}
 	}
-	else {
-	  fprintf(stderr, "Syntax error: --wait has no arguments\n");
-	}
-	break;
+}
 
-	/* close */
-      case 't':
-	if(opt_syntax(optind, argc, argv)) {
-	  if(verbose_flag == 1)
-	    fprintf(stdout, "%s %s\n", argv[optind-2], argv[optind-1]);
-	  long num;
-	  char*endptr = NULL;
-	  num = strtol(argv[optind-1], &endptr, 10);
-	  if(*endptr){
-	    fprintf(stderr, "Error converting number\n");
-	    break;
-	  }
-	  /* check if the file even exists */
-	  if((num > (fn-1)) || (num < 0)) {
-	    fprintf(stderr, "File does not exist\n");
-	    exit_status = 1;
-	    break;
-	  }
-	  close(fd[num]);
-	  fd[num] = -1;
+
+/*
+prints --wait commands and exit codes
+*/
+void wait_print(int start, int end, char **argv, int exit_stat) {
+	printf("[Exit Status: %u] ", exit_stat);
+	for (int i = start; i <= end; i++){
+		printf("%s ", argv[i]);
 	}
-	else {
-	  fprintf(stderr, "Syntax error: Invalid arguments for --close\n");
+	printf("\n");
+}
+
+
+/*
+print rusage information
+*/
+void option_profile(int who) {
+	if (getrusage(who, &usage)== 0) {
+		// success
+		struct timeval user_time = usage.ru_utime;
+		struct timeval os_time = usage.ru_stime;
+		double user;
+		double system;
+
+		if (who == RUSAGE_SELF) {
+
+			user = (double)((double)user_time.tv_sec + (double)user_time.tv_usec/1000000) -
+				(double)((double)old_user_time.tv_sec + (double)old_user_time.tv_usec/1000000);
+			system = (double)((double)os_time.tv_sec + (double)os_time.tv_usec/1000000) -
+				(double)((double)old_system_time.tv_sec + (double)old_system_time.tv_usec/1000000);
+
+			printf("\nRessources used by option: \n");
+			printf("Time spent executing user instructions: %f seconds; \n", user);
+			printf("Time spent on operating system code on behalf of process: %f seconds; \n", system);
+			printf("\n");
+		} else {
+			user = (double)((double)user_time.tv_sec + (double)user_time.tv_usec/1000000) -
+				(double)((double)old_child_user_time.tv_sec + (double)old_child_user_time.tv_usec/1000000);
+			system = (double)((double)os_time.tv_sec + (double)os_time.tv_usec/1000000) -
+				(double)((double)old_child_system_time.tv_sec + (double)old_child_system_time.tv_usec/1000000);
+
+			printf("\nRessources used by children processes: \n");
+			printf("Time spent executing user instructions: %f seconds; \n", user);
+			printf("Time spent on operating system code on behalf of process: %f seconds; \n", system);
+			printf("\n");
+		}
+
+	} else {
+		fprintf(stderr, "Error: Could not retrieve usage data.\n");
+		return_val(1);
+	}
+}
+
+
+int
+main (int argc, char **argv) {
+	// passed option identifier
+	int c;
+
+	verbose_flag = 0;
+	profile_flag = 0;
+	return_value = 0;
+
+	// open file flags
+	int oflags = 0;
+
+	// initialize file descriptor array
+	d_index = 0;
+	POINTERS_SIZE = 5;
+	file_pointers = malloc(POINTERS_SIZE * sizeof(int));
+	pipe_or_no = malloc(POINTERS_SIZE * sizeof(int));
+
+	// initialize command waiting array
+	WAIT_SIZE = 5;
+	wait_pids = malloc(WAIT_SIZE * sizeof(int));
+	start_commands = malloc(WAIT_SIZE * sizeof(int));
+	end_commands = malloc(WAIT_SIZE * sizeof(int));
+	w_index = 0;
+
+	// argument list for --wait printing
+	char **arguments = malloc(argc *sizeof(char *));
+	for (int i = 0; i < argc; i++){
+		arguments[i] = argv[i];
 	}
 
-      /* Misc options */
-      case 'v':
-	/* check syntax */
-	if(flag_syntax (optind, argc, argv)){
-	  if(verbose_flag == 1)
-	    fprintf(stdout, "--verbose\n");
-	  else
-	      verbose_flag = 1;
+	if (argc == 1) {
+		// no options/arguments provided
+		fprintf(stderr, "No options have been provided.\n");
+		exit(0);
 	}
-	else {
-	    fprintf(stderr, "Syntax error: --verbose has no arguments.\n");
-	    exit_status = 1;
-	  }
- 	break;
 
-	/* profile */
-      case 'm':
-	if(flag_syntax(optind, argc, argv)) {
-	    prof_flag = 1;
-	    if(verbose_flag == 1)
-	      fprintf(stdout, "--profile\n");
-	  }
-	else {
-	  fprintf(stderr, "Syntax error: --profile has no arguments.\n");
+	if (!isOption(argv[optind])){
+		// first argument is not an option
+		fprintf(stderr, "Warning: The argument %s is not an option and will be \
+ignored.\n", argv[optind]);
 	}
-	break;
 
-	/* abort */
-      case 'n':
-	if(verbose_flag == 1)
-	  fprintf(stdout, "--abort\n");
+	// rusage variables initialize
 
-	if(flag_syntax(optind, argc, argv))
-	  raise(SIGSEGV);
-	else {
-	  fprintf(stderr, "Syntax error: --abort has no arguments.\n");
-	  exit_status = 1;
+	while (1) {
+
+		static struct option long_options[] = {
+
+			// file flags
+			{"append",		no_argument,				0,							'a'},
+			{"cloexec",		no_argument,				0,							'e'},
+			{"creat",			no_argument,				0,							'c'},
+			{"directory",	no_argument,				0,							'd'},
+			{"dsync",			no_argument,				0,							'D'},
+			{"excl",			no_argument,				0,							'E'},
+			{"nofollow",	no_argument,				0,							'n'},
+			{"nonblock",	no_argument,				0,							'N'},
+			{"rsync",			no_argument,				0,							'r'},
+			{"sync",			no_argument,				0,							's'},
+			{"trunc",			no_argument,				0,							't'},
+
+			// file-opening flags
+			{"rdonly",		required_argument,	0,							'R'},
+			{"rdwr",			required_argument,	0,							'b'},
+			{"wronly",		required_argument,	0,							'w'},
+			{"pipe",			no_argument,				0,							'p'},
+
+			// subcommand options
+			{"command",		required_argument,	0,							'C'},
+			{"wait",			no_argument,				0,							'W'},
+
+			// miscellaneous options
+			{"close",			required_argument,	0,							'o'},
+			{"verbose",		no_argument,				&verbose_flag,		1},
+			{"profile",		no_argument,				&profile_flag,		1},
+			{"abort",			no_argument,				0,							'A'},
+			{"catch",			required_argument,	0,							'h'},
+			{"ignore",		required_argument,	0,							'i'},
+			{"default",		required_argument,	0,							'f'},
+			{"pause",			no_argument,				0,							'P'},
+			{0, 					0, 									0, 								0}
+		};
+
+		// stores the option index
+		int option_index = 0;
+
+		// get argument type
+		c = getopt_long (argc, argv, "",
+			long_options, &option_index);
+
+		// stop loop if no more arguments
+		if (c == -1)
+			break;
+
+
+		switch (c) {
+			if (profile_flag) {
+				if (getrusage(RUSAGE_SELF, &usage)== 0) {
+					old_user_time = usage.ru_utime;
+					old_system_time = usage.ru_stime;
+				} else {
+					fprintf(stderr, "Error: Could not retrieve usage data.\n");
+					return_val(1);
+				}
+			}
+
+			// flag set
+			case 0:
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
+			}
+			break;
+
+
+			//--append
+			case 'a':
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--append] does not accept any arguments. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
+			if (verbose_flag) {
+				printf("--append ");
+			}
+
+			oflags |= O_APPEND;
+			break;
+
+
+			// --cloexec
+			case 'e':
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--cloexec] does not accept any arguments. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
+			if (verbose_flag) {
+				printf("--cloexec ");
+			}
+
+			oflags |= O_CLOEXEC;
+			break;
+
+
+			// --creat
+			case 'c':
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--creat] does not accept any arguments. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
+			if (verbose_flag) {
+				printf("--creat ");
+			}
+
+			oflags |= O_CREAT;
+			break;
+
+
+			// --directory
+			case 'd':
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--directory] does not accept any arguments. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
+			if (verbose_flag) {
+				printf("--directory ");
+			}
+
+			oflags |= O_DIRECTORY;
+			break;
+
+
+			// --dsync
+			case 'D':
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--dsync] does not accept any arguments. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
+			if (verbose_flag) {
+				printf("--dsync ");
+			}
+
+			oflags |= O_DSYNC;
+			break;
+
+
+			// --excl
+			case 'E':
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--excl] does not accept any arguments. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
+			if (verbose_flag) {
+				printf("--excl ");
+			}
+
+			oflags |= O_EXCL;
+			break;
+
+
+			// --nofollow
+			case 'n':
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--nofollow] does not accept any arguments. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
+			if (verbose_flag) {
+				printf("--nofollow ");
+			}
+
+			oflags |= O_NOFOLLOW;
+			break;
+
+
+			// --nonblock
+			case 'N':
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--nonblock] does not accept any arguments. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
+			if (verbose_flag) {
+				printf("--nonblock ");
+			}
+
+			oflags |= O_NONBLOCK;
+			break;
+
+
+			// --rsync
+			case 'r':
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--rsync] does not accept any arguments. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
+			if (verbose_flag) {
+				printf("--rsync ");
+			}
+
+			oflags |= O_RSYNC;
+			break;
+
+
+			// --sync
+			case 's':
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--sync] does not accept any arguments. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
+			if (verbose_flag) {
+				printf("--sync ");
+			}
+
+			oflags |= O_SYNC;
+			break;
+
+
+			// --trunc
+			case 't':
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--trunc] does not accept any arguments. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
+			if (verbose_flag) {
+				printf("--trunc ");
+			}
+
+			oflags |= O_TRUNC;
+			break;
+
+
+			// --rdonly f
+			case 'R':
+
+			if (isOption(optarg) || optarg == NULL) {
+				if (verbose_flag) {
+					printf("--rdonly\n");
+				}
+				// missing file after option
+				fprintf(stderr, "Error: [--rdonly f] requires an argument; no file was \
+provided.\n");
+				optind--;
+				return_val(1);
+				break;
+			}
+
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--rdonly f] only accepts a single argument. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
+			//if verbose_flag is set
+			if (verbose_flag) {
+				printf("--rdonly %s\n", optarg);
+			}
+
+			oflags |= O_RDONLY;
+
+			// open read only file
+			open_file(optarg, oflags);
+
+			// clear oflags
+			oflags = 0;
+
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
+			}
+
+			break;
+
+
+			// --rdwr f
+			case 'b':
+
+			if (isOption(optarg) || optarg == NULL) {
+				if (verbose_flag) {
+					printf("--rdwr\n");
+				}
+				// missing file after option
+				fprintf(stderr, "Error: [--rdwr f] requires an argument; no file was \
+provided.\n");
+				optind--;
+				return_val(1);
+				break;
+			}
+
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--rdwr f] only accepts a single argument. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
+			//if verbose_flag is set
+			if (verbose_flag) {
+				printf("--rdwr %s\n", optarg);
+			}
+
+			oflags |= O_RDWR;
+
+			// open read/write file
+			open_file(optarg, oflags);
+
+			// clear oflags
+			oflags = 0;
+
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
+			}
+
+			break;
+
+
+			// --wronly f
+			case 'w':
+
+			if (isOption(optarg) || optarg == NULL) {
+				// missing file after option
+				if (verbose_flag) {
+					printf("--wronly\n");
+				}
+				fprintf(stderr, "Error: [--wronly f] requires an argument; no file was \
+provided.\n");
+				optind--;
+				return_val(1);
+				break;
+			}
+
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--wronly f] only accepts a single argument. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
+			//if verbose_flag is set
+			if (verbose_flag) {
+				printf("--wronly %s\n", optarg);
+			}
+
+			oflags |= O_WRONLY;
+
+			// open output file
+			open_file(optarg, oflags);
+
+			// clear oflags
+			oflags = 0;
+
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
+			}
+
+			break;
+
+
+			// --pipe
+			case 'p':
+
+			//if verbose_flag is set
+			if (verbose_flag) {
+				if (oflags != 0) {
+					printf("\n");
+				}
+				printf("--pipe\n");
+			}
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--pipe] does not accept any arguments. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
+			if (pipe(pipe_fd) == -1) {
+				// creating pipe failed
+				fprintf(stderr, "Error: Could not create pipe.\n");
+				return_val(1);
+
+				// update return value if higher than previous value
+				if (errno == EINVAL) {
+					perror("");
+				}
+
+				break;
+			}
+
+			// add pipe descriptors to file descriptors array
+
+			// read end
+			file_pointers[d_index] = pipe_fd[0];
+			pipe_or_no[d_index] = 1;
+			d_index++;
+
+			//write end
+			file_pointers[d_index] = pipe_fd[1];
+			pipe_or_no[d_index] = 1;
+			d_index++;
+
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
+			}
+
+			break;
+
+
+			// --command i o e cmd args
+			case 'C':
+			addToFileArray();
+			com_args = 0;
+			c_index = 0;
+			int curr_index = optind-1;
+			start_commands[w_index] = curr_index - 1;
+
+			while (curr_index != argc && !isOption(argv[curr_index])) {
+				com_args++;
+				curr_index++;
+			}
+			end_commands[w_index] = curr_index - 1;
+
+			if (verbose_flag) {
+				if (oflags != 0) {
+					printf("\n");
+				}
+				printf("--command ");
+				if (!isOption(optarg)) {
+					// some arguments provided
+					for (int i = -1; i < com_args - 1; i++) {
+						printf("%s ", argv[optind + i]);
+					}
+				}
+				printf("\n");
+			}
+
+			if (isOption(optarg) || optarg == NULL || com_args < 4) {
+				// missing arguments
+				fprintf(stderr, "Error: [--command i o e cmd args] requires at least 4 \
+arguments: standard input, standard output, standard error and a cmd to execute \
+with 0 or more arguments. The required number of arguments was not provided.\n");
+				return_val(1);
+				break;
+			}
+
+			if (!isNumeric(optarg) || !isNumeric(argv[optind]) ||
+				!isNumeric(argv[optind + 1])) {
+				// 1st 3 arguments not numbers
+				fprintf(stderr, "Error: The first 3 arguments of \
+[--command i o e cmd args] must be integers.\n");
+				return_val(1);
+				break;
+			}
+
+				// setting standard input
+			cmd_fd[0] = atoi(optarg);
+				// setting standard output
+			cmd_fd[1] = atoi(argv[optind]);
+				// setting standard error
+			cmd_fd[2] = atoi(argv[optind+1]);
+
+			if (cmd_fd[0] >= d_index || cmd_fd[1] >= d_index || cmd_fd[2] >= d_index) {
+					// fd out of range
+				fprintf(stderr, "Error: One or more of the provided file descriptors is \
+out of range. These files have not yet been opened or created.\n");
+				return_val(1);
+				break;
+			}
+
+			if (file_pointers[cmd_fd[0]] == -1 || file_pointers[cmd_fd[1]] == -1
+				|| file_pointers[cmd_fd[2]] == -1) {
+				// 1st 3 arguments not numbers
+				fprintf(stderr, "Error: One or more of the provided file descriptors is \
+invalid. These files could not be opened or have been closed.\n");
+				return_val(1);
+				break;
+			}
+
+
+			// creating argument data array
+			char **args = malloc((com_args - 2)*sizeof(char *));
+
+			ind = optind + 2;
+
+			while (ind != argc && !isOption(argv[ind])) {
+					// adding arguments to array
+				args[c_index] = argv[ind];
+				c_index++;
+				ind++;
+			}
+			args[c_index] = NULL;
+
+				// execute command
+			exec_cmd(args);
+
+				// free memory allocation
+			free(args);
+
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
+			}
+
+			break;
+
+
+			// --wait
+			// TODO: fix profile for children
+			case 'W':
+			if (optind != argc && !isOption(argv[optind])){
+					// more than one argument is provided
+				fprintf(stderr, "Warning: [--wait] does not accept any arguments. \
+	%s is not an option and will be ignored.\n", argv[optind]);
+			}
+			if (verbose_flag) {
+				if (oflags != 0) {
+					printf("\n");
+				}
+				printf("--wait\n");
+			}
+
+			for (int i = 0; i < d_index; i++) {
+				close(file_pointers[i]);
+			}
+
+
+			int status;
+			int exit_stat;
+
+			if (profile_flag) {
+				if (getrusage(RUSAGE_CHILDREN, &usage)== 0) {
+					old_child_user_time = usage.ru_utime;
+					old_child_system_time = usage.ru_stime;
+				} else {
+					fprintf(stderr, "Error: Could not retrieve usage data.\n");
+					return_val(1);
+				}
+			}
+
+
+
+			for (int i = 0; i < w_index; i++) {
+				// wait for command to complete
+				waitpid(wait_pids[i], &status, 0);
+				if (WIFEXITED(status)) {
+					// get exit status
+					exit_stat = WEXITSTATUS(status);
+					wait_print(start_commands[i],end_commands[i], arguments, exit_stat);
+
+					// update return value
+					return_val(exit_stat);
+				} else {
+					fprintf(stderr, "Error: Child process did not exit as expected.\n");
+					return_val(1);
+				}
+			}
+
+			if (profile_flag) {
+				printf("Parent Process Usage Data: \n");
+				option_profile(RUSAGE_SELF);
+				printf("Children Processes Usage Data: \n");
+				option_profile(RUSAGE_CHILDREN);
+			}
+
+			break;
+
+
+			// --close N
+			case 'o':
+			if (isOption(optarg) || optarg == NULL) {
+				// missing file number after option
+				if (verbose_flag) {
+					if (oflags != 0) {
+						printf("\n");
+					}
+					printf("--close\n");
+				}
+				fprintf(stderr, "Error: [--close N] requires an argument; no file number \
+	was provided.\n");
+				optind--;
+				return_val(1);
+				break;
+			}
+
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--close N] only accepts a single argument. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
+			if (verbose_flag) {
+				if (oflags != 0) {
+					printf("\n");
+				}
+				printf("--close %s\n", optarg);
+			}
+
+			if (!isNumeric(optarg)) {
+				// argument is not file descriptor index.
+				fprintf(stderr, "Error: Argument %s is not a file number.  \
+	[--close N] requires an integer argument.\n", optarg);
+				return_val(1);
+				break;
+			}
+
+			int close_file = atoi(optarg);
+
+			if (close_file >= d_index) {
+					// argument out of range
+				fprintf(stderr, "Error: The file descriptor %u is \
+	out of range. This file has not yet been opened or created.\n", close_file);
+				return_val(1);
+				break;
+			}
+
+			if (file_pointers[close_file] != -1) {
+				close(file_pointers[close_file]);
+			}
+
+			file_pointers[close_file] = -1;
+
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
+			}
+
+			break;
+
+
+			// --abort
+			case 'A':
+			if (optind != argc && !isOption(argv[optind])){
+					// more than one argument is provided
+				fprintf(stderr, "Warning: [--nofollow] does not accept any arguments. \
+	%s is not an option and will be ignored.\n", argv[optind]);
+			}
+			if (verbose_flag) {
+				if (oflags != 0) {
+					printf("\n");
+				}
+				printf("--abort\n");
+			}
+			raise(SIGSEGV);
+			break;
+
+
+			// --catch N
+			case 'h':
+			if (isOption(optarg) || optarg == NULL) {
+
+				// missing file number after option
+				if (verbose_flag) {
+					if (oflags != 0) {
+						printf("\n");
+					}
+					printf("--catch\n");
+				}
+				fprintf(stderr, "Error: [--catch N] requires an argument; no signal number \
+	was provided.\n");
+				optind--;
+				return_val(1);
+				break;
+			}
+
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--catch N] only accepts a single argument. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
+			if (verbose_flag) {
+				if (oflags != 0) {
+					printf("\n");
+				}
+				printf("--catch %s\n", optarg);
+			}
+
+			if (!isNumeric(optarg)) {
+				// argument is not signal number.
+				fprintf(stderr, "Error: Argument %s is not a signal number.  \
+	[--catch N] requires an integer argument.\n", optarg);
+				return_val(1);
+				break;
+			}
+
+			int sign = atoi(optarg);
+
+			if (sign < 1 || sign > 31) {
+				// argument is not valid signal descriptor index.
+				fprintf(stderr, "Error: Argument %u is not a valid signal number.\n",
+					sign);
+				return_val(1);
+				break;
+			}
+
+			if (signal(sign, sighandler) == SIG_ERR) {
+				fprintf(stderr, "Error: There was an error in handling the signal.\n");
+				return_val(1);
+			}
+
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
+			}
+
+			break;
+
+
+			// --ignore N
+			case 'i':
+			if (isOption(optarg) || optarg == NULL) {
+
+				// missing file number after option
+				if (verbose_flag) {
+					if (oflags != 0) {
+						printf("\n");
+					}
+					printf("--ignore\n");
+				}
+				fprintf(stderr, "Error: [--ignore N] requires an argument; no signal number \
+	was provided.\n");
+				optind--;
+				return_val(1);
+				break;
+			}
+
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--ignore N] only accepts a single argument. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
+			if (verbose_flag) {
+				if (oflags != 0) {
+					printf("\n");
+				}
+				printf("--ignore %s\n", optarg);
+			}
+
+			if (!isNumeric(optarg)) {
+				// argument is not signal number.
+				fprintf(stderr, "Error: Argument %s is not a signal number.  \
+	[--ignore N] requires an integer argument.\n", optarg);
+				return_val(1);
+				break;
+			}
+
+			int sign2 = atoi(optarg);
+
+			if (sign2 < 1 || sign2 > 31) {
+				// argument is not valid signal descriptor index.
+				fprintf(stderr, "Error: Argument %u is not a valid signal number.\n",
+					sign2);
+				return_val(1);
+				break;
+			}
+
+			if (signal(sign2, SIG_IGN) == SIG_ERR) {
+				fprintf(stderr, "Error: There was an error in handling the signal.\n");
+				return_val(1);
+			}
+
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
+			}
+
+			break;
+
+
+			// --default N
+			case 'f':
+			if (isOption(optarg) || optarg == NULL) {
+
+				// missing file number after option
+				if (verbose_flag) {
+					if (oflags != 0) {
+						printf("\n");
+					}
+					printf("--default\n");
+				}
+				fprintf(stderr, "Error: [--default N] requires an argument; no signal number \
+	was provided.\n");
+				optind--;
+				return_val(1);
+				break;
+			}
+
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--default N] only accepts a single argument. \
+%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
+			if (verbose_flag) {
+				if (oflags != 0) {
+					printf("\n");
+				}
+				printf("--default %s\n", optarg);
+			}
+
+			if (!isNumeric(optarg)) {
+				// argument is not signal number.
+				fprintf(stderr, "Error: Argument %s is not a signal number.  \
+	[--default N] requires an integer argument.\n", optarg);
+				return_val(1);
+				break;
+			}
+
+			int sign3 = atoi(optarg);
+
+			if (sign3 < 1 || sign3 > 31) {
+				// argument is not valid signal descriptor index.
+				fprintf(stderr, "Error: Argument %u is not a valid signal number.\n",
+					sign3);
+				return_val(1);
+				break;
+			}
+
+			if (signal(sign3, SIG_DFL) == SIG_ERR) {
+				fprintf(stderr, "Error: There was an error in handling the signal.\n");
+				return_val(1);
+			}
+
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
+			}
+
+			break;
+
+
+			// --pause
+			case 'P':
+			//if verbose_flag is set
+			if (verbose_flag) {
+				if (oflags != 0) {
+					printf("\n");
+				}
+				printf("--pause\n");
+			}
+			if (optind != argc && !isOption(argv[optind])){
+				// more than one argument is provided
+				fprintf(stderr, "Warning: [--pause] does not accept any arguments. \
+	%s is not an option and will be ignored.\n", argv[optind]);
+			}
+
+			if (pause() == -1) {
+				fprintf(stderr, "Error: Program was unable to pause.\n");
+				return_val(1);
+			}
+
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
+			}
+
+			break;
+
+
+			default:
+			fprintf(stderr, "Error: Command not recognized.\n");
+			return_val(1);
+			break;
+		}
 	}
-	break;
 
-	/* catch */
-      case 'o':
-	if(opt_syntax(optind, argc, argv)) {
-	  int sig_num = atoi(argv[optind-1]);
-	  if (verbose_flag == 1)
-	    fprintf(stdout, "--catch %d\n", sig_num);
-	  if (signal(sig_num, &catch_handler) == SIG_ERR)
-	    fprintf(stderr, "Error handling signal.\n");
+	// close all opened files
+	for (int i = 0; i < d_index; i++) {
+		if (file_pointers[i] != -1) {
+			close(file_pointers[i]);
+		}
 	}
-	else {
-	  fprintf(stderr, "Syntax error: --catch has one argument.\n");
-	  exit_status = 1;
-	}
-	break;
 
-	/* ignore */
-      case 'p':
-	if (opt_syntax(optind, argc, argv)) {
-	  int sig_num = atoi(argv[optind-1]);
-	  if (verbose_flag == 1)
-	    fprintf(stdout, "--ignore %d\n", sig_num);
-	  if (signal(sig_num, SIG_IGN) == SIG_ERR)
-	    fprintf(stderr, "Error handling signal.\n");
-	}
-	else {
-	  fprintf(stderr, "Syntax error: --ignore has one argument.\n");
-	  exit_status = 1;
-	}
-	break;
+		// free file data array memory
+	free(file_pointers);
+	free(pipe_or_no);
+	free(wait_pids);
+	free(start_commands);
+	free(end_commands);
+	free(arguments);
 
-	/* default */
-      case 'q':
-	if (opt_syntax(optind, argc, argv)) {
-	  int sig_num = atoi(argv[optind-1]);
-	  if (verbose_flag == 1)
-	    fprintf(stdout, "--default %d\n", sig_num);
-	  if (signal(sig_num, SIG_DFL) == SIG_ERR)
-	    fprintf(stderr, "Error handling signal.\n");
-	}
-	else {
-	  fprintf(stderr, "Syntax error: --default has one argument.\n");
-	  exit_status = 1;
-	}
-	break;
-
-	/* pause */
-      case 's':
-	if (verbose_flag == 1)
-	  fprintf(stdout, "--pause\n");
-
-	if(flag_syntax(optind, argc, argv)) {
-	  if (pause() == -1)
-	    fprintf(stderr, "Pause failed.\n");
-	}
-	else {
-	  fprintf(stderr, "Syntax error: --pause has no arguments.\n");
-	  exit_status = 1;
-	}
-	break;
-
-      case ':':
-      case '?':
-	/* getopt prints message to stderr */
-	break;
-      default:
-	break;
-      }
-    /* getrusage */
-    /* need to get user and system time */
-    if(prof_flag == 1) {
-      struct rusage ru;
-      getrusage(RUSAGE_SELF, &ru);
-
-      /* newtime used for getting the current rusage time */
-      newutime = ru.ru_utime;
-      newstime = ru.ru_stime;
-
-      fprintf(stdout, "User CPU Time Used: %lld seconds, %lld microseconds. System CPU Time Used: %lld seconds, %lld microseconds.\n", \
-	      (long long)(newutime.tv_sec - oldutime.tv_sec), (long long)(newutime.tv_usec - oldutime.tv_usec), \
-	      (long long)(newstime.tv_sec - oldstime.tv_sec), (long long)(newstime.tv_usec - oldstime.tv_usec));
-      /* update oldtime to the current time (which will become the old time) */
-      oldutime = newutime;
-      oldstime = newstime;
-    }
-  }
-
-  if (max_extstat == 0)
-    exit(exit_status);
-  else
-    exit(max_extstat);
+	exit(return_value);
 }
