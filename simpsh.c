@@ -54,6 +54,9 @@ static int profile_flag;
 struct rusage usage;
 struct timeval old_user_time;
 struct timeval old_system_time;
+struct timeval old_child_user_time;
+struct timeval old_child_system_time;
+
 
 
 /*
@@ -238,16 +241,31 @@ void option_profile(int who) {
 		// success
 		struct timeval user_time = usage.ru_utime;
 		struct timeval os_time = usage.ru_stime;
+		double user;
+		double system;
 
-		double user = (double)((double)user_time.tv_sec + (double)user_time.tv_usec/1000000) -
-			(double)((double)old_user_time.tv_sec + (double)old_user_time.tv_usec/1000000);
-		double system = (double)((double)os_time.tv_sec + (double)os_time.tv_usec/1000000) -
-			(double)((double)old_system_time.tv_sec + (double)old_system_time.tv_usec/1000000);
+		if (who == RUSAGE_SELF) {
 
-		printf("\nRessources used by option: \n");
-		printf("Time spent executing user instructions: %f seconds; \n", user);
-		printf("Time spent on operating system code on behalf of process: %f seconds; \n", system);
-		printf("\n");
+			user = (double)((double)user_time.tv_sec + (double)user_time.tv_usec/1000000) -
+				(double)((double)old_user_time.tv_sec + (double)old_user_time.tv_usec/1000000);
+			system = (double)((double)os_time.tv_sec + (double)os_time.tv_usec/1000000) -
+				(double)((double)old_system_time.tv_sec + (double)old_system_time.tv_usec/1000000);
+
+			printf("\nRessources used by option: \n");
+			printf("Time spent executing user instructions: %f seconds; \n", user);
+			printf("Time spent on operating system code on behalf of process: %f seconds; \n", system);
+			printf("\n");
+		} else {
+			user = (double)((double)user_time.tv_sec + (double)user_time.tv_usec/1000000) -
+				(double)((double)old_child_user_time.tv_sec + (double)old_child_user_time.tv_usec/1000000);
+			system = (double)((double)os_time.tv_sec + (double)os_time.tv_usec/1000000) -
+				(double)((double)old_child_system_time.tv_sec + (double)old_child_system_time.tv_usec/1000000);
+
+			printf("\nRessources used by children processes: \n");
+			printf("Time spent executing user instructions: %f seconds; \n", user);
+			printf("Time spent on operating system code on behalf of process: %f seconds; \n", system);
+			printf("\n");
+		}
 
 	} else {
 		fprintf(stderr, "Error: Could not retrieve usage data.\n");
@@ -834,6 +852,17 @@ invalid. These files could not be opened or have been closed.\n");
 
 			int status;
 			int exit_stat;
+
+			if (profile_flag) {
+				if (getrusage(RUSAGE_CHILDREN, &usage)== 0) {
+					old_child_user_time = usage.ru_utime;
+					old_child_system_time = usage.ru_stime;
+				} else {
+					fprintf(stderr, "Error: Could not retrieve usage data.\n");
+					return_val(1);
+				}
+			}
+
 
 
 			for (int i = 0; i < w_index; i++) {
