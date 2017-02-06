@@ -35,12 +35,10 @@ else
 fi
 
 mv simpsh ./$TEMPDIR/
+cp a0.txt ./$TEMPDIR/
 
 cd $TEMPDIR
 
-cat > a0.txt <<'EOF'
-Hello world! CS 111!
-EOF
 
 # use the provided lab1c_generate_a0.sh and pg98.txt to generate a0.txt
 # please use the provided a0.txt and make sure it is not modified by any code
