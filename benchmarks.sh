@@ -44,10 +44,28 @@ echo "==="
 # benchmark 1 prompt command
 echo ""
 echo "--->test case 1:"
-echo "check if there is time info for --rdonly command"
-echo "time should be almost 0"
-touch test1in.txt
-./simpsh --profile --rdonly test1in.txt
+echo "prompt command"
+touch test25in.txt
+touch test25out.txt
+touch test25err.txt
+./simpsh \
+  --verbose \
+  --rdonly a \
+  --pipe \
+  --pipe \
+  --creat --trunc --wronly c \
+  --creat --append --wronly d \
+  --profile
+  --command 3 5 6 tr A-Z a-z \
+  --command 0 2 6 sort \
+  --command 1 4 6 cat b - \
+  --wait > test25out.txt
+echo "./simpsh times"
+echo "===="
+echo test25out
+echo "===="
+
+
 
 # test case 2 --profile scope
 echo ""
