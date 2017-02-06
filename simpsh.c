@@ -234,8 +234,8 @@ print rusage information
 void option_profile(int who) {
 	if (getrusage(who, &usage)== 0) {
 		// success
-		double user_time = (double)usage.ru_utime.tv_sec + (double)(usage.ru_utime.tv_usec/1000000);
-		double os_time = (double)usage.ru_stime.tv_sec + (double)(usage.ru_stime.tv_usec/1000000);
+		double user_time = (double)usage.ru_utime.tv_sec + (double)usage.ru_utime.tv_usec/1000000;
+		double os_time = (double)usage.ru_stime.tv_sec + (double)usage.ru_stime.tv_usec/1000000;
 		printf("\nRessources used by option: \n");
 		printf("Time spent executing user instructions: %d seconds; \n", (user_time - old_user_time));
 		printf("Time spent on operating system code on behalf of process: %d seconds; \n", (os_time - old_system_time));
