@@ -88,7 +88,7 @@ echo "in terms of each command's time"
 echo "you should only see time info for --wronly, but not for --rdonly"
 touch test2in.txt
 touch test2out.txt
-./simpsh --rdonly test2in.txt --profile --wronly test2out.txt
+./simpsh --profile --rdonly test2in.txt --wronly test2out.txt
 
 # test case 3 --profile sort large file
 echo ""
