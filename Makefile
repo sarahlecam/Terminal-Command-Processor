@@ -59,4 +59,4 @@ clean:
 
 # make dist
 dist:
-	tar zcvf lab1-sarahlecam.tar.gz --transform='s,^,lab1-sarahlecam/,' simpsh.c Makefile README a0.txt gradingtesting.sh test.sh
+	tar zcvf lab1-sarahlecam.tar.gz --transform='s,^,lab1-sarahlecam/,' simpsh.c Makefile README a0.txt test.sh benchmarks.sh
