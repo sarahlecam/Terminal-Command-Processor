@@ -55,7 +55,7 @@ touch test25err.txt
   --pipe \
   --creat --trunc --wronly c \
   --creat --append --wronly d \
-  --profile
+  --profile \
   --command 3 5 6 tr A-Z a-z \
   --command 0 2 6 sort \
   --command 1 4 6 cat b - \
