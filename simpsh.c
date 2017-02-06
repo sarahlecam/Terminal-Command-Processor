@@ -51,7 +51,8 @@ static int profile_flag;
 
 // rusage variables
 struct rusage usage;
-
+double old_user_time;
+double old_system_time;
 
 /*
 signal handler
@@ -233,6 +234,12 @@ print rusage information
 void option_profile(int who) {
 	if (getrusage(who, &usage)== 0) {
 		// success
+		double user_time = (double)usage.ru_utime.tv_sec + (double)(usage.ru_utime.tv_usec/1000000);
+		double os_time = (double)usage.ru_stime.tv_sec + (double)(usage.ru_stime.tv_usec/1000000);
+		printf("\nRessources used by option: \n");
+		printf("Time spent executing user instructions: %d seconds; \n", (user_time - old_user_time));
+		printf("Time spent on operating system code on behalf of process: %d seconds; \n", (os_time - old_system_time));
+		printf("\n");
 
 	} else {
 		fprintf(stderr, "Error: Could not retrieve usage data.\n");
@@ -284,7 +291,18 @@ main (int argc, char **argv) {
 ignored.\n", argv[optind]);
 	}
 
+	// rusage variables initialize
+
 	while (1) {
+		if (profile_flag) {
+			if (getrusage(RUSAGE_SELF, &usage)== 0) {
+				old_user_time = (double)usage.ru_utime.tv_sec + (double)(usage.ru_utime.tv_usec/1000000);
+				old_system_time = (double)usage.ru_stime.tv_sec + (double)(usage.ru_stime.tv_usec/1000000);
+			} else {
+				fprintf(stderr, "Error: Could not retrieve usage data.\n");
+				return_val(1);
+			}
+		}
 
 		static struct option long_options[] = {
 
@@ -550,6 +568,11 @@ provided.\n");
 
 			// clear oflags
 			oflags = 0;
+
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
+			}
+
 			break;
 
 
@@ -586,6 +609,11 @@ provided.\n");
 
 			// clear oflags
 			oflags = 0;
+
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
+			}
+
 			break;
 
 
@@ -623,6 +651,10 @@ provided.\n");
 			// clear oflags
 			oflags = 0;
 
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
+			}
+
 			break;
 
 
@@ -651,6 +683,7 @@ provided.\n");
 				if (errno == EINVAL) {
 					perror("");
 				}
+
 				break;
 			}
 
@@ -665,6 +698,10 @@ provided.\n");
 			file_pointers[d_index] = pipe_fd[1];
 			pipe_or_no[d_index] = 1;
 			d_index++;
+
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
+			}
 
 			break;
 
@@ -759,10 +796,15 @@ invalid. These files could not be opened or have been closed.\n");
 				// free memory allocation
 			free(args);
 
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
+			}
+
 			break;
 
 
 			// --wait
+			// TODO: fix profile for children
 			case 'W':
 			if (optind != argc && !isOption(argv[optind])){
 					// more than one argument is provided
@@ -801,6 +843,12 @@ invalid. These files could not be opened or have been closed.\n");
 				}
 			}
 
+			if (profile_flag) {
+				printf("Parent Process Usage Data: \n");
+				option_profile(RUSAGE_SELF);
+				printf("Children Processes Usage Data: \n");
+				option_profile(RUSAGE_CHILDREN);
+			}
 
 			break;
 
@@ -858,6 +906,10 @@ invalid. These files could not be opened or have been closed.\n");
 			}
 
 			file_pointers[close_file] = -1;
+
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
+			}
 
 			break;
 
@@ -933,6 +985,10 @@ invalid. These files could not be opened or have been closed.\n");
 				return_val(1);
 			}
 
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
+			}
+
 			break;
 
 
@@ -988,6 +1044,10 @@ invalid. These files could not be opened or have been closed.\n");
 			if (signal(sign2, SIG_IGN) == SIG_ERR) {
 				fprintf(stderr, "Error: There was an error in handling the signal.\n");
 				return_val(1);
+			}
+
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
 			}
 
 			break;
@@ -1046,6 +1106,11 @@ invalid. These files could not be opened or have been closed.\n");
 				fprintf(stderr, "Error: There was an error in handling the signal.\n");
 				return_val(1);
 			}
+
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
+			}
+
 			break;
 
 
@@ -1068,6 +1133,11 @@ invalid. These files could not be opened or have been closed.\n");
 				fprintf(stderr, "Error: Program was unable to pause.\n");
 				return_val(1);
 			}
+
+			if (profile_flag) {
+				option_profile(RUSAGE_SELF);
+			}
+
 			break;
 
 
