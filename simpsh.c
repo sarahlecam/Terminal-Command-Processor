@@ -243,6 +243,7 @@ void option_profile(int who) {
 		struct timeval os_time = usage.ru_stime;
 		double user;
 		double system;
+		double total;
 
 		if (who == RUSAGE_SELF) {
 
@@ -250,20 +251,24 @@ void option_profile(int who) {
 				(double)((double)old_user_time.tv_sec + (double)old_user_time.tv_usec/1000000);
 			system = (double)((double)os_time.tv_sec + (double)os_time.tv_usec/1000000) -
 				(double)((double)old_system_time.tv_sec + (double)old_system_time.tv_usec/1000000);
+			total = user + system;
 
 			printf("\nRessources used by option: \n");
 			printf("Time spent executing user instructions: %f seconds; \n", user);
 			printf("Time spent on operating system code on behalf of process: %f seconds; \n", system);
+			printf("Total CPU time used by process: %f seconds; \n", total);
 			printf("\n");
 		} else {
 			user = (double)((double)user_time.tv_sec + (double)user_time.tv_usec/1000000) -
 				(double)((double)old_child_user_time.tv_sec + (double)old_child_user_time.tv_usec/1000000);
 			system = (double)((double)os_time.tv_sec + (double)os_time.tv_usec/1000000) -
 				(double)((double)old_child_system_time.tv_sec + (double)old_child_system_time.tv_usec/1000000);
+			total = user + system;
 
 			printf("\nRessources used by children processes: \n");
 			printf("Time spent executing user instructions: %f seconds; \n", user);
 			printf("Time spent on operating system code on behalf of process: %f seconds; \n", system);
+			printf("Total CPU time used by process: %f seconds; \n", total);
 			printf("\n");
 		}
 
