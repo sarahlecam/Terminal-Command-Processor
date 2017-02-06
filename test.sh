@@ -25,7 +25,7 @@ make || exit
 
 # chmod 744 simpsh
 
-TEMPDIR="lab1btestingtempdir"
+TEMPDIR="lab1testingtempdir"
 
 rm -rf $TEMPDIR
 

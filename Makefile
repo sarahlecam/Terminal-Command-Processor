@@ -25,7 +25,7 @@ simpsh.o: simpsh.c
 # TODO: remove grading script
 check: simpsh
 	# ./test.sh
-	./gradingtesting.sh
+	./benchmarks.sh
 
 
 # make clean
@@ -44,9 +44,13 @@ clean:
 			rm -rf lab1-sarahlecam.tar.gz; \
 	fi;
 	# TODO: change to chosen name
-	if [ -e lab1creadergradingtempdir ] ; \
+	if [ -e lab1testingtempdir ] ; \
 		then \
-			rm -rf lab1creadergradingtempdir; \
+			rm -rf lab1testingtempdir; \
+	fi;
+	if [ -e lab1benchmarkstempdir ] ; \
+		then \
+			rm -rf lab1benchmarkstempdir; \
 	fi;
 	if [ -e lab1-sarahlecam ] ; \
 		then \

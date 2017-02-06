@@ -1,24 +1,4 @@
-#!/bin/sh
-
-# UCLA CS 111 Lab 1c testing script, written by Zhaoxing Bu (zbu@cs.ucla.edu)
-
-# to reader: please read the entire script carefully
-
-# students can work in a team of two, you only need to write down the score for
-# the student who submit the assignmet. in your score file sent back to us,
-# please make sure that you have a column storing this student's teammate's UID,
-# thus we can give his/her partner score by the UID column.
-
-# 3 test cases, each for 10 points
-# no partial credit, students get either 10 or 0
-# please do not run multiple testing scripts at the same time
-# only run this on lnxsrv09.seas.ucla.edu please
-# REMEMBER to execute PATH=/usr/local/cs/bin:$PATH in shell to call
-# the correct gcc for compiling students' work
-# this PATH change is restored after logging out
-# this script automatically changes the PATH value for you
-# but I do not guarantee it works, but if should work ;-)
-# any comments, suggestions, problem reports are greatly welcomed
+# benchmark tests
 
 if [ "${PATH:0:16}" == "/usr/local/cs/bin" ]
 then
@@ -40,7 +20,7 @@ make || exit
 
 # chmod 744 simpsh
 
-TEMPDIR="lab1creadergradingtempdir"
+TEMPDIR="lab1benchmarkstempdir"
 
 rm -rf $TEMPDIR
 
