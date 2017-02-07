@@ -88,9 +88,19 @@ echo ""
 echo "--->test case 3:"
 echo "./simpsh: "
 touch test3out.txt
-./simpsh
-    --rdonly a0.txt --wronly test3out.txt \
-    --wronly test3err.txt --profile --command 0 1 2 uniq --wait
+./simpsh \
+  --profile \
+  --rdonly a1.txt \
+  --pipe \
+  --pipe \
+  --pipe \
+  --creat --trunc --wronly c \
+  --creat --append --wronly d \
+  --command 0 2 8 uniq -u \
+  --command 1 4 8 sort \
+  --command 3 6 8 wc -w \
+  --command 5 7 8 cat \
+  --wait > test3out.txt
 echo "===="
 cat test3out.txt
 echo "===="

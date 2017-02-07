@@ -1,4 +1,4 @@
 #! /bin/sh
 
-( (sort < a1.txt | cat b - | tr A-Z a-z > c) 2>>d)
+( (uniq -u < a1.txt | sort | wc -w | cat > c) 2>>d)
 times

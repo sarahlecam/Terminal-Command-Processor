@@ -113,14 +113,14 @@ to add another file. If not, double size of file array.
 */
 void addToFileArray() {
 
-	if (d_index == POINTERS_SIZE) {
+	if (d_index >= POINTERS_SIZE) {
 		// not enough space allocated; double size of array
 		POINTERS_SIZE = POINTERS_SIZE * 2;
 		file_pointers = realloc(file_pointers, POINTERS_SIZE * sizeof(int));
 		pipe_or_no = realloc(pipe_or_no, POINTERS_SIZE * sizeof(int));
 	}
 
-	if (w_index == WAIT_SIZE) {
+	if (w_index >= WAIT_SIZE) {
 		// not enough space allocated; double size of array
 		WAIT_SIZE = WAIT_SIZE * 2;
 		wait_pids = realloc(wait_pids, 	WAIT_SIZE * sizeof(int));
@@ -709,6 +709,8 @@ provided.\n");
 
 			// add pipe descriptors to file descriptors array
 
+			addToFileArray();
+
 			// read end
 			file_pointers[d_index] = pipe_fd[0];
 			pipe_or_no[d_index] = 1;
@@ -1212,11 +1214,11 @@ invalid. These files could not be opened or have been closed.\n");
 	}
 
 	// close all opened files
-	// for (int i = 0; i < d_index; i++) {
-	// 	if (file_pointers[i] != -1) {
-	// 		close(file_pointers[i]);
-	// 	}
-	// }
+	for (int i = 0; i < d_index; i++) {
+		if (file_pointers[i] != -1) {
+			close(file_pointers[i]);
+		}
+	}
 
 		// free file data array memory
 	free(file_pointers);
