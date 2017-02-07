@@ -40,7 +40,7 @@ echo ""
 echo "--->test case 1:"
 echo "prompt command"
 touch test1out.txt
-./simpsh \
+(./simpsh \
   --verbose \
   --rdonly a0.txt \
   --pipe \
@@ -50,12 +50,13 @@ touch test1out.txt
   --command 3 5 6 tr A-Z a-z \
   --command 0 2 6 sort \
   --command 1 4 6 cat b - \
-  --wait > test25out.txt
+  --wait > test25out.txt)
+times
 echo "./simpsh times"
 echo "===="
 cat test1out.txt
 echo "===="
-echo time((sort ))
+# echo time((sort ))
 
 
 
