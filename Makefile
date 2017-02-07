@@ -22,14 +22,11 @@ simpsh.o: simpsh.c
 
 
 # make check
-# TODO: remove grading script
 check: simpsh
-	# ./test.sh
-	./benchmarks.sh
+	./test.sh
 
 
 # make clean
-# TODO: fix testing directory clean up
 clean:
 	if [ -e simpsh ] ; \
 		then \
@@ -43,7 +40,6 @@ clean:
 		then \
 			rm -rf lab1-sarahlecam.tar.gz; \
 	fi;
-	# TODO: change to chosen name
 	if [ -e lab1testingtempdir ] ; \
 		then \
 			rm -rf lab1testingtempdir; \
@@ -59,4 +55,4 @@ clean:
 
 # make dist
 dist:
-	tar zcvf lab1-sarahlecam.tar.gz --transform='s,^,lab1-sarahlecam/,' simpsh.c Makefile README a0.txt test.sh benchmarks.sh
+	tar zcvf lab1-sarahlecam.tar.gz --transform='s,^,lab1-sarahlecam/,' simpsh.c Makefile README a1.txt test.sh benchmarks.sh benchmark1.sh benchmark2.sh benchmark3.sh
