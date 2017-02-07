@@ -14,6 +14,9 @@ Files:
       - dist: creates the distribution tarball containing simpsh.c,
 		Makefile, README and test.sh
   - test.sh: testing script which tests option implementation
+  - a1.txt: file used for testing accuracy and time of benchmark files
+  - benchmarks.sh: 3 benchmark test that test complicated ./simpsh commands
+  - benchmark1-3.sh: bash/dash equivalent tests to those of benchmarks.sh
 
 Features:
 My simpsh works as directed in the Lab1 project description. In order to
@@ -27,7 +30,7 @@ Implemented options:
   Subcommand options
     --command, --wait
   Miscelaneous options
-    --close, --verbose, --abort, --catch, --ignore, --default, --pause
+    --close, --verbose, --profile, --abort, --catch, --ignore, --default, --pause
 
 Limitations:
 No known limitations
@@ -38,6 +41,9 @@ on the code to ensure that the program recognized arguments and errors
 correctly. I then ran the provided grading script to ensure that everything
 seemed correct. Finally I incorporated the provided tests with my own and
 tested possible edge cases and syntax errors.
+
+For Benchmark testing, I constructed ./simpsh tests and compared their 
+output times to those of bash and dash. 
 
 Sources:
  - http://stackoverflow.com/questions/15466782/parsing-command-line-options-with-multiple-arguments-getopt
