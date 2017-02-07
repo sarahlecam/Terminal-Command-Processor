@@ -1176,37 +1176,38 @@ invalid. These files could not be opened or have been closed.\n");
 			break;
 		}
 	}
+	if (profile_flag) {
+		if (getrusage(RUSAGE_SELF, &usage)== 0) {
+			// success
+			struct timeval final_user_time = usage.ru_utime;
+			struct timeval final_system_time = usage.ru_stime;
 
-	if (getrusage(RUSAGE_SELF, &usage)== 0) {
-		// success
-		struct timeval final_user_time = usage.ru_utime;
-		struct timeval final_system_time = usage.ru_stime;
+			printf("\nTotal Ressources used by Parent Processes: \n");
+			printf("Time spent executing user instructions: %f seconds; \n",
+				(double)final_user_time.tv_sec + (double)final_user_time.tv_usec/1000000);
+			printf("Time spent on operating system code on behalf of Processes: %f seconds; \n",
+				(double)final_system_time.tv_sec + (double)final_system_time.tv_usec/1000000);
 
-		printf("\nTotal Ressources used by Parent Processes: \n");
-		printf("Time spent executing user instructions: %f seconds; \n",
-			(double)final_user_time.tv_sec + (double)final_user_time.tv_usec/1000000);
-		printf("Time spent on operating system code on behalf of Processes: %f seconds; \n",
-			(double)final_system_time.tv_sec + (double)final_system_time.tv_usec/1000000);
+		} else {
+			fprintf(stderr, "Error: Could not retrieve usage data.\n");
+			return_val(1);
+		}
 
-	} else {
-		fprintf(stderr, "Error: Could not retrieve usage data.\n");
-		return_val(1);
-	}
+		if (getrusage(RUSAGE_CHILDREN, &usage) == 0) {
+			// success
+			struct timeval final_user_time = usage.ru_utime;
+			struct timeval final_system_time = usage.ru_stime;
 
-	if (getrusage(RUSAGE_CHILDREN, &usage) == 0) {
-		// success
-		struct timeval final_user_time = usage.ru_utime;
-		struct timeval final_system_time = usage.ru_stime;
+			printf("Total Ressources used by Child Processes: \n");
+			printf("Time spent executing user instructions: %f seconds; \n",
+				(double)final_user_time.tv_sec + (double)final_user_time.tv_usec/1000000);
+			printf("Time spent on operating system code on behalf of Processes: %f seconds; \n",
+				(double)final_system_time.tv_sec + (double)final_system_time.tv_usec/1000000);
 
-		printf("Total Ressources used by Child Processes: \n");
-		printf("Time spent executing user instructions: %f seconds; \n",
-			(double)final_user_time.tv_sec + (double)final_user_time.tv_usec/1000000);
-		printf("Time spent on operating system code on behalf of Processes: %f seconds; \n",
-			(double)final_system_time.tv_sec + (double)final_system_time.tv_usec/1000000);
-
-	} else {
-		fprintf(stderr, "Error: Could not retrieve usage data.\n");
-		return_val(1);
+		} else {
+			fprintf(stderr, "Error: Could not retrieve usage data.\n");
+			return_val(1);
+		}
 	}
 
 	// close all opened files
