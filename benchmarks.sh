@@ -7,18 +7,12 @@ else
     PATH=/usr/local/cs/bin:$PATH
 fi
 
-
-echo "please check if there is any error message below"
-echo "==="
-
 if [ -e "simpsh" ]
 then
     rm -rf simpsh
 fi
 
 make || exit
-
-# chmod 744 simpsh
 
 TEMPDIR="lab1benchmarkstempdir"
 
@@ -45,9 +39,7 @@ echo "==="
 echo ""
 echo "--->test case 1:"
 echo "prompt command"
-touch test25in.txt
-touch test25out.txt
-touch test25err.txt
+touch test1out.txt
 ./simpsh \
   --verbose \
   --rdonly a0.txt \
@@ -55,15 +47,15 @@ touch test25err.txt
   --pipe \
   --creat --trunc --wronly c \
   --creat --append --wronly d \
-  --profile \
   --command 3 5 6 tr A-Z a-z \
   --command 0 2 6 sort \
   --command 1 4 6 cat b - \
   --wait > test25out.txt
 echo "./simpsh times"
 echo "===="
-cat test25out.txt
+cat test1out.txt
 echo "===="
+echo time((sort ))
 
 
 
