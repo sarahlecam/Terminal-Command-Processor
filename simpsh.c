@@ -313,6 +313,13 @@ ignored.\n", argv[optind]);
 	}
 
 	// rusage variables initialize
+	if (getrusage(RUSAGE_SELF, &usage)== 0) {
+		old_user_time = usage.ru_utime;
+		old_system_time = usage.ru_stime;
+	} else {
+		fprintf(stderr, "Error: Could not retrieve usage data.\n");
+		return_val(1);
+	}
 
 	while (1) {
 
@@ -1176,10 +1183,10 @@ invalid. These files could not be opened or have been closed.\n");
 		struct timeval final_system_time = usage.ru_stime;
 
 		printf("\nTotal Ressources used by Parent Processes: \n");
-		printf("Time spent executing user instructions: %u seconds, %u microseconds; \n",
-			(int)final_user_time.tv_sec, (int)final_user_time.tv_usec);
-		printf("Time spent on operating system code on behalf of process: %u seconds, %u microseconds; \n",
-			(int)final_system_time.tv_sec, (int)final_system_time.tv_usec);
+		printf("Time spent executing user instructions: %f seconds; \n",
+			(double)final_user_time.tv_sec + (double)final_user_time.tv_usec/1000000);
+		printf("Time spent on operating system code on behalf of Processes: %f seconds; \n",
+			(double)final_system_time.tv_sec + (double)final_system_time.tv_usec/1000000);
 
 	} else {
 		fprintf(stderr, "Error: Could not retrieve usage data.\n");
@@ -1192,10 +1199,10 @@ invalid. These files could not be opened or have been closed.\n");
 		struct timeval final_system_time = usage.ru_stime;
 
 		printf("Total Ressources used by Child Processes: \n");
-		printf("Time spent executing user instructions: %u seconds, %u microseconds; \n",
-			(int)final_user_time.tv_sec, (int)final_user_time.tv_usec);
-		printf("Time spent on operating system code on behalf of process: %u seconds, %u microseconds; \n",
-			(int)final_system_time.tv_sec, (int)final_system_time.tv_usec);
+		printf("Time spent executing user instructions: %f seconds; \n",
+			(double)final_user_time.tv_sec + (double)final_user_time.tv_usec/1000000);
+		printf("Time spent on operating system code on behalf of Processes: %f seconds; \n",
+			(double)final_system_time.tv_sec + (double)final_system_time.tv_usec/1000000);
 
 	} else {
 		fprintf(stderr, "Error: Could not retrieve usage data.\n");
