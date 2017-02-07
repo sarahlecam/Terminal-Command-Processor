@@ -53,26 +53,39 @@ touch test1out.txt
   --command 3 5 6 tr A-Z a-z \
   --command 0 2 6 sort \
   --command 1 4 6 cat b - \
-  --wait > test25out.txt)
-echo "./simpsh CPU user and system times"
+  --wait > test1out.txt)
+echo "--profile output: "
 echo "===="
-cat test25out.txt
+cat test1out.txt
 echo "===="
 echo ""
 echo "bash/dash: "
-((sort < a0.txt | cat b - | tr A-Z a-z > c) 2>>d)
+echo "===="
+( (sort < a0.txt | cat b - | tr A-Z a-z > c) 2>>d)
 times
+echo "===="
+echo ""
 
 
 
 # test case 2 --profile scope
 echo ""
 echo "--->test case 2:"
-echo ""
-echo "you should only see time info for --wronly, but not for --rdonly"
-touch test2in.txt
 touch test2out.txt
-./simpsh --profile --rdonly test2in.txt --wronly test2out.txt
+echo "./simpsh:"
+./simpsh --profile --rdonly a0.txt --wronly b --wronly d \
+     --verbose --command 0 1 2 sleep 0.01 --command 0 1 2 cat --wait > test2out.txt
+echo "--profile output: "
+echo "===="
+cat test2out.txt
+echo "===="
+echo ""
+echo "bash/dash: "
+echo "===="
+( (sleep 0.01 && cat a0.txt > c) 2>>d)
+times
+echo "===="
+echo ""
 
 # test case 3 --profile sort large file
 echo ""
