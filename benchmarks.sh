@@ -1,3 +1,5 @@
+#! /bin/sh
+
 # benchmark tests
 
 if [ "${PATH:0:16}" == "/usr/local/cs/bin" ]
@@ -38,9 +40,10 @@ echo "==="
 # benchmark 1 prompt command
 echo ""
 echo "--->test case 1:"
-echo "prompt command"
+echo "./simpsh: "
 touch test1out.txt
 (./simpsh \
+  --profile \
   --verbose \
   --rdonly a0.txt \
   --pipe \
@@ -51,19 +54,21 @@ touch test1out.txt
   --command 0 2 6 sort \
   --command 1 4 6 cat b - \
   --wait > test25out.txt)
+echo "./simpsh CPU user and system times"
+echo "===="
+cat test25out.txt
+echo "===="
+echo ""
+echo "bash/dash: "
+((sort < a0.txt | cat b - | tr A-Z a-z > c) 2>>d)
 times
-echo "./simpsh times"
-echo "===="
-cat test1out.txt
-echo "===="
-# echo time((sort ))
 
 
 
 # test case 2 --profile scope
 echo ""
 echo "--->test case 2:"
-echo "in terms of each command's time"
+echo ""
 echo "you should only see time info for --wronly, but not for --rdonly"
 touch test2in.txt
 touch test2out.txt
