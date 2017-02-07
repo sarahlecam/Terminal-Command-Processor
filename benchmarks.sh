@@ -44,7 +44,6 @@ echo "./simpsh: "
 touch test1out.txt
 (./simpsh \
   --profile \
-  --verbose \
   --rdonly a1.txt \
   --pipe \
   --pipe \
@@ -52,9 +51,8 @@ touch test1out.txt
   --creat --append --wronly d \
   --command 3 5 6 tr A-Z a-z \
   --command 0 2 6 sort \
-  --command 1 4 6 cat c - \
+  --command 1 4 6 cat b - \
   --wait > test1out.txt)
-echo "--profile output: "
 echo "===="
 cat test1out.txt
 echo "===="
@@ -67,25 +65,33 @@ echo ""
 echo "--->test case 2:"
 touch test2out.txt
 echo "./simpsh:"
-./simpsh --profile --rdonly a1.txt --pipe --pipe --wronly c --wronly d \
-     --verbose --command 0 2 6 uniq d --command 1 4 6 sort \
-     --command 3 5 6 cat b - --wait > test2out.txt
+./simpsh \
+  --profile \
+  --rdonly a1.txt \
+  --pipe \
+  --pipe \
+  --creat --trunc --wronly c \
+  --creat --append --wronly d \
+  --command 0 2 6 uniq -D \
+  --command 1 4 6 sort \
+  --command 3 5 6 cat -b \
+  --wait > test2out.txt
 echo "--profile output: "
 echo "===="
 cat test2out.txt
 echo "===="
 echo ""
 
+
 # test case 3 --profile sort large file
 echo ""
 echo "--->test case 3:"
-echo "check time info for --command sort, should not be 0 (you can test"
-echo "the uniq command by yourself to see the running time in shell"
-echo "here you may see multiple running time, but there should be one"
-echo "corresponding to the running time of uniq the a0.txt"
+echo "./simpsh: "
 touch test3out.txt
-touch test3err.txt
-./simpsh --verbose --rdonly a0.txt --wronly test3out.txt \
+./simpsh
+    --rdonly a0.txt --wronly test3out.txt \
     --wronly test3err.txt --profile --command 0 1 2 uniq --wait
-
+echo "===="
+cat test3out.txt
+echo "===="
 echo ""

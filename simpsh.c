@@ -809,6 +809,7 @@ invalid. These files could not be opened or have been closed.\n");
 				ind++;
 			}
 			args[c_index] = NULL;
+			optind = ind;
 
 				// execute command
 			exec_cmd(args);
@@ -1211,11 +1212,11 @@ invalid. These files could not be opened or have been closed.\n");
 	}
 
 	// close all opened files
-	for (int i = 0; i < d_index; i++) {
-		if (file_pointers[i] != -1) {
-			close(file_pointers[i]);
-		}
-	}
+	// for (int i = 0; i < d_index; i++) {
+	// 	if (file_pointers[i] != -1) {
+	// 		close(file_pointers[i]);
+	// 	}
+	// }
 
 		// free file data array memory
 	free(file_pointers);
